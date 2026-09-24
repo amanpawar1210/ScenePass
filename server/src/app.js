@@ -14,6 +14,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { venuesRouter } from "./routes/venues.js";
 import { paymentsRouter } from "./routes/payments.js";
 import { liveRouter } from "./routes/live.js";
+import { newsletterRouter } from "./routes/newsletter.js";
 import { Waitlist } from "./models/waitlist.js";
 import { Order } from "./models/order.js";
 import { requireAuth } from "./middleware/auth.js";
@@ -38,6 +39,7 @@ export function createApp() {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/venues", venuesRouter);
   app.use("/api/payments", paymentsRouter);
+  app.use("/api/newsletter", newsletterRouter);
   app.use("/api", liveRouter);
   // Recent bookings for the live activity ticker (first names only).
   app.get("/api/activity", async (_req, res) => {

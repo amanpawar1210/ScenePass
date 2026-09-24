@@ -73,3 +73,12 @@ export async function sendInviteEmail({ to, fromName, room, event }) {
     text: `${fromName} invited you to book ${event.title} together: ${link}`,
   });
 }
+
+/** Welcome email for newsletter subscribers. */
+export async function sendWelcomeEmail({ to }) {
+  const body = `
+    <p>Thanks for subscribing! Every Friday we'll send you the best shows, new drops and exclusive promo codes.</p>
+    <p>To start, here's <b>SCENE10</b>: 10% off your next booking.</p>
+    <p>${button(`${config.appUrl}/discover`, "Find something to do")}</p>`;
+  return sendMail({ to, subject: "Welcome to ScenePass weekly picks", html: layout("You're on the list 🎉", body), text: "Thanks for subscribing to ScenePass. Use SCENE10 for 10% off." });
+}

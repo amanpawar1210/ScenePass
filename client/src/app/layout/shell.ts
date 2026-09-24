@@ -23,6 +23,7 @@ import { Logo } from '../shared/logo';
 import { NotificationBell } from '../shared/notification-bell';
 import { CommandPalette } from '../shared/command-palette';
 import { QuickView } from '../shared/quick-view';
+import { SiteFooter } from '../shared/site-footer';
 
 interface NavItem {
   path: string;
@@ -46,7 +47,7 @@ const PROFILE_NAV: NavItem = { path: '/profile', label: 'Profile', mobileLabel: 
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, LucideAngularModule, Logo, NotificationBell, CommandPalette, QuickView],
+  imports: [RouterOutlet, LucideAngularModule, Logo, NotificationBell, CommandPalette, QuickView, SiteFooter],
   host: { '(window:scroll)': 'onScroll()' },
   template: `
     @if (store.loadError(); as error) {
@@ -121,12 +122,7 @@ const PROFILE_NAV: NavItem = { path: '/profile', label: 'Profile', mobileLabel: 
           <router-outlet />
         </main>
 
-        <footer class="site-footer">
-          <div class="container footer-inner">
-            <app-logo />
-            <span class="muted">Live seat availability across {{ store.cities().length }} cities · payments are simulated in this demo</span>
-          </div>
-        </footer>
+        <app-site-footer />
 
         <app-command-palette />
         <app-quick-view />
