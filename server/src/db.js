@@ -1,11 +1,21 @@
 import mongoose from "mongoose";
 import { config } from "./config.js";
-import { seedEvents } from "./seed-data.js";
 import { Event } from "./models/event.js";
+import { seedDatabase } from "./services/seeder.js";
 
 let memoryServer;
+let connecting;
 
-export async function connectDb() {
+/** Connects once per process; serverless invocations reuse the same connection. */
+export function connectDb() {
+  connecting ??= openConnection().catch((err) => {
+    connecting = undefined;
+    throw err;
+  });
+  return connecting;
+}
+
+async function openConnection() {
   let uri = config.mongoUri;
 
   if (!uri) {
@@ -21,8 +31,8 @@ export async function connectDb() {
   console.log(`MongoDB connected: ${mongoose.connection.name}`);
 
   if ((await Event.estimatedDocumentCount()) === 0) {
-    await Event.insertMany(seedEvents);
-    console.log(`Seeded ${seedEvents.length} events`);
+    const result = await seedDatabase();
+    console.log(`Seeded ${result.events} events, ${result.orders} demo bookings`);
   }
 }
 

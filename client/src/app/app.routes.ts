@@ -19,14 +19,35 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/discover/discover').then((m) => m.DiscoverPage),
       },
       {
+        path: 'events/:id',
+        canActivate: [customerGuard],
+        loadComponent: () => import('./pages/event/event-detail').then((m) => m.EventDetailPage),
+      },
+      {
         path: 'events/:id/seats',
         canActivate: [customerGuard],
         loadComponent: () => import('./pages/seats/seats').then((m) => m.SeatsPage),
       },
+      { path: 'room', redirectTo: 'rooms' },
       {
-        path: 'room',
+        path: 'rooms',
         canActivate: [customerGuard],
-        loadComponent: () => import('./pages/room/room').then((m) => m.RoomPage),
+        loadComponent: () => import('./pages/rooms/rooms').then((m) => m.RoomsPage),
+      },
+      {
+        path: 'rooms/:code',
+        canActivate: [customerGuard],
+        loadComponent: () => import('./pages/rooms/room').then((m) => m.RoomPage),
+      },
+      {
+        path: 'venues',
+        canActivate: [customerGuard],
+        loadComponent: () => import('./pages/venues/venues').then((m) => m.VenuesPage),
+      },
+      {
+        path: 'venues/:slug',
+        canActivate: [customerGuard],
+        loadComponent: () => import('./pages/venues/venue').then((m) => m.VenuePage),
       },
       {
         path: 'tickets',

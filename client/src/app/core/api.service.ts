@@ -1,10 +1,32 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { EventInput, EventItem, Order, Role, Seat, User } from './models';
+import {
+  AdminStats,
+  AppNotification,
+  GroupRoom,
+  ReviewSummary,
+  Review,
+  Venue,
+  VenueDetail,
+  CheckinResult,
+  EventInput,
+  EventItem,
+  HoldResult,
+  Meta,
+  Order,
+  Quote,
+  Role,
+  SeatMap,
+  User,
+} from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
+
+  meta() {
+    return this.http.get<Meta>('/api/meta');
+  }
 
   login(body: { name: string; email: string; role: Role }) {
     return this.http.post<{ token: string; user: User }>('/api/auth/login', body);
@@ -12,12 +34,21 @@ export class ApiService {
   me() {
     return this.http.get<{ user: User }>('/api/auth/me');
   }
+  updateMe(body: Partial<Pick<User, 'name' | 'city'>>) {
+    return this.http.patch<{ user: User }>('/api/auth/me', body);
+  }
 
-  events() {
-    return this.http.get<EventItem[]>('/api/events');
+  events(all = false) {
+    return this.http.get<EventItem[]>('/api/events', { params: all ? { scope: 'all' } : {} });
+  }
+  event(id: string) {
+    return this.http.get<EventItem>(`/api/events/${id}`);
   }
   seats(eventId: string) {
-    return this.http.get<Seat[]>(`/api/events/${eventId}/seats`);
+    return this.http.get<SeatMap>(`/api/events/${eventId}/seats`);
+  }
+  hold(eventId: string, seats: string[]) {
+    return this.http.put<HoldResult>(`/api/events/${eventId}/hold`, { seats });
   }
   createEvent(body: EventInput) {
     return this.http.post<EventItem>('/api/events', body);
@@ -32,8 +63,14 @@ export class ApiService {
   orders() {
     return this.http.get<Order[]>('/api/orders');
   }
-  createOrder(eventId: string, seats: string[]) {
-    return this.http.post<Order>('/api/orders', { eventId, seats });
+  quote(eventId: string, seats: string[], promoCode: string) {
+    return this.http.post<Quote>('/api/orders/quote', { eventId, seats, promoCode });
+  }
+  createOrder(eventId: string, seats: string[], promoCode: string | null, roomCode?: string) {
+    return this.http.post<Order>('/api/orders', { eventId, seats, promoCode, roomCode });
+  }
+  cancelOrder(id: string) {
+    return this.http.post<Order>(`/api/orders/${id}/cancel`, {});
   }
 
   favourites() {
@@ -42,11 +79,71 @@ export class ApiService {
   toggleFavourite(eventId: string) {
     return this.http.put<string[]>(`/api/favourites/${eventId}`, {});
   }
+
+  reviews(eventId: string) {
+    return this.http.get<ReviewSummary>(`/api/events/${eventId}/reviews`);
+  }
+  addReview(eventId: string, rating: number, comment: string) {
+    return this.http.post<Review>(`/api/events/${eventId}/reviews`, { rating, comment });
+  }
+
+  waitlist() {
+    return this.http.get<string[]>('/api/waitlist');
+  }
+  joinWaitlist(eventId: string) {
+    return this.http.post<{ waitlisted: boolean; waitlistCount: number }>(`/api/events/${eventId}/waitlist`, {});
+  }
+  leaveWaitlist(eventId: string) {
+    return this.http.delete<{ waitlisted: boolean; waitlistCount: number }>(`/api/events/${eventId}/waitlist`);
+  }
+
+  venues() {
+    return this.http.get<Venue[]>('/api/venues');
+  }
+  venue(slug: string) {
+    return this.http.get<VenueDetail>(`/api/venues/${slug}`);
+  }
+
+  rooms() {
+    return this.http.get<GroupRoom[]>('/api/rooms');
+  }
+  room(code: string) {
+    return this.http.get<GroupRoom>(`/api/rooms/${code}`);
+  }
+  createRoom(eventId: string) {
+    return this.http.post<GroupRoom>('/api/rooms', { eventId });
+  }
+  joinRoom(code: string) {
+    return this.http.post<GroupRoom>(`/api/rooms/${code}/join`, {});
+  }
+  leaveRoom(code: string) {
+    return this.http.post<void>(`/api/rooms/${code}/leave`, {});
+  }
+  setRoomSeats(code: string, seats: string[]) {
+    return this.http.put<GroupRoom>(`/api/rooms/${code}/seats`, { seats });
+  }
+
+  notifications() {
+    return this.http.get<{ items: AppNotification[]; unread: number }>('/api/notifications');
+  }
+  readAllNotifications() {
+    return this.http.post<void>('/api/notifications/read-all', {});
+  }
+  readNotification(id: string) {
+    return this.http.post<void>(`/api/notifications/${id}/read`, {});
+  }
+
+  stats() {
+    return this.http.get<AdminStats>('/api/admin/stats');
+  }
+  checkin(code: string) {
+    return this.http.post<CheckinResult>('/api/admin/checkin', { code });
+  }
 }
 
 export function errorMessage(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
-    if (err.status === 0) return 'Cannot reach the ScenePass server';
+    if (err.status === 0 || err.status === 502 || err.status === 504) return 'Cannot reach the ScenePass server';
     return err.error?.message ?? 'Something went wrong';
   }
   return 'Something went wrong';

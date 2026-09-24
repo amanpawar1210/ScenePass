@@ -7,10 +7,10 @@ export function signToken(user) {
   return jwt.sign({ sub: user.id }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 }
 
-export async function requireAuth(req, _res, next) {
+async function userFromRequest(req) {
   const header = req.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) throw new HttpError(401, "Sign in required");
+  if (!token) return null;
 
   let payload;
   try {
@@ -18,10 +18,24 @@ export async function requireAuth(req, _res, next) {
   } catch {
     throw new HttpError(401, "Session expired, please sign in again");
   }
-
   const user = await User.findById(payload.sub);
   if (!user) throw new HttpError(401, "Account not found");
-  req.user = user;
+  return user;
+}
+
+export async function requireAuth(req, _res, next) {
+  req.user = await userFromRequest(req);
+  if (!req.user) throw new HttpError(401, "Sign in required");
+  next();
+}
+
+/** Attaches req.user when a valid token is present, but never rejects anonymous visitors. */
+export async function optionalAuth(req, _res, next) {
+  try {
+    req.user = await userFromRequest(req);
+  } catch {
+    req.user = null;
+  }
   next();
 }
 

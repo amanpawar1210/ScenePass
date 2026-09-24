@@ -1,121 +1,92 @@
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import {
-  ArrowLeft,
-  Check,
-  ChevronRight,
-  CreditCard,
-  LucideAngularModule,
-  Plus,
-  Users,
-  X,
-  Zap,
-} from 'lucide-angular';
+import { ArrowLeft, Check, ChevronRight, LucideAngularModule, Timer, Users, X } from 'lucide-angular';
 import { ApiService, errorMessage } from '../../core/api.service';
-import { MAX_SEATS, Seat } from '../../core/models';
+import { Order, Seat, SeatMap } from '../../core/models';
 import { StoreService } from '../../core/store.service';
+import { inr, shortDate, timeOf } from '../../core/format';
+import { CheckoutModal } from '../../shared/checkout-modal';
+import { SeatMapView } from '../../shared/seat-map';
 
-// Seats shown as "held by a friend" in the group-room preview.
-const DEMO_HELD = [19, 38];
+const POLL_MS = 12_000;
 
 @Component({
   selector: 'app-seats',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, SeatMapView, CheckoutModal],
   template: `
     @if (event(); as event) {
-      <section class="seat-page">
-        <header class="seat-head">
-          <button (click)="router.navigateByUrl('/discover')"><lucide-icon [img]="icons.ArrowLeft" [size]="18" /></button>
+      <div class="container page">
+        <header class="page-head with-back">
+          <button class="icon-btn-round" aria-label="Back to event" (click)="router.navigate(['/events', event.id])">
+            <lucide-icon [img]="icons.ArrowLeft" [size]="18" />
+          </button>
           <div>
-            <small>{{ event.type }} · {{ event.date }}</small>
+            <small class="eyebrow">{{ date() }} · {{ time() }} · {{ event.venue }}</small>
             <h1>{{ event.title }}</h1>
-            <p>{{ event.venue }}</p>
           </div>
-          <div class="room-people">
-            <span>YOU</span><span>NK</span><span>JM</span>
-            <button (click)="router.navigateByUrl('/room')"><lucide-icon [img]="icons.Plus" [size]="14" /></button>
-          </div>
+          <button class="btn btn-outline" [disabled]="creatingRoom()" (click)="bookWithFriends()">
+            <lucide-icon [img]="icons.Users" [size]="17" /> Book with friends
+          </button>
         </header>
+
         <div class="seat-layout">
-          <section class="seat-map">
-            <div class="screen"><span>STAGE</span></div>
-            <div class="seat-legend">
-              <span><i class="available"></i>Available</span>
-              <span><i class="selected"></i>Your seats</span>
-              <span><i class="held"></i>Held by friend</span>
-              <span><i class="blocked"></i>Unavailable</span>
-            </div>
-            <div class="seat-grid">
-              @for (seat of seats(); track seat.id; let i = $index) {
-                <button
-                  [disabled]="seat.blocked || seat.taken"
-                  [title]="seat.id + ' · ₹' + seat.price"
-                  [class.selected]="selected().includes(seat.id)"
-                  [class.held]="isHeld(i)"
-                  (click)="toggleSeat(seat.id)"
-                >
-                  <span>{{ seat.id }}</span>
-                </button>
+          <section class="card seat-card">
+            @if (map(); as m) {
+              <app-seat-map [map]="m" [selected]="selected()" (toggle)="toggleSeat($event)" />
+            } @else {
+              <div class="skeleton-block"></div>
+            }
+          </section>
+
+          <aside class="card summary-card">
+            <h2>Your seats</h2>
+            <div class="timer" [class.urgent]="remaining() !== null && remaining()! < 60">
+              <lucide-icon [img]="icons.Timer" [size]="18" />
+              @if (remaining() !== null) {
+                <div><b>Held for {{ countdown() }}</b><small>Nobody else can book them until then</small></div>
+              } @else {
+                <div><b>Pick up to {{ store.maxSeats() }} seats</b><small>We hold them for {{ holdMinutes() }} minutes while you pay</small></div>
               }
             </div>
-            <div class="tiers"><span>PLATINUM · ₹2,499</span><span>GOLD · ₹1,899</span><span>SILVER · ₹1,499</span></div>
-          </section>
-          <aside class="booking-panel">
-            <span>LIVE SEAT ROOM</span>
-            <h2>Build your perfect row.</h2>
-            <div class="timer">
-              <lucide-icon [img]="icons.Zap" [size]="17" />
-              <div><b>Seats lock for 06:42</b><small>Synced across everyone in your room</small></div>
-            </div>
-            <div class="selection">
-              <header><span>YOUR SELECTION</span><b>{{ selected().length }}/{{ maxSeats }}</b></header>
+            <div class="selection-list">
               @for (seat of selectedSeats(); track seat.id) {
-                <div>
-                  <span><b>{{ seat.id }}</b><small>{{ seat.tier }}</small></span>
-                  <strong>₹{{ seat.price }}</strong>
-                  <button (click)="toggleSeat(seat.id)"><lucide-icon [img]="icons.X" [size]="14" /></button>
+                <div class="selection-item">
+                  <span class="seat-pill">{{ seat.id }}</span>
+                  <span class="grow">{{ seat.tier }}</span>
+                  <b>{{ price(seat.price) }}</b>
+                  <button class="icon-btn-round xs" [attr.aria-label]="'Remove ' + seat.id" (click)="toggleSeat(seat)"><lucide-icon [img]="icons.X" [size]="14" /></button>
                 </div>
               } @empty {
-                <p>Select seats from the map to continue.</p>
+                <p class="muted empty-note">Tap seats on the map to add them.</p>
               }
             </div>
-            <div class="price"><span>Total</span><b>₹{{ total().toLocaleString('en-IN') }}</b></div>
-            <button class="continue" [disabled]="!selected().length" (click)="checkout.set(true)">
-              Continue to payment <lucide-icon [img]="icons.ChevronRight" [size]="17" />
+            <div class="summary-total"><span>Total</span><b>{{ price(total()) }}</b></div>
+            <button class="btn btn-primary btn-lg block" [disabled]="!selected().length || syncing()" (click)="openCheckout()">
+              Continue to payment <lucide-icon [img]="icons.ChevronRight" [size]="18" />
             </button>
-            <small class="safe"><lucide-icon [img]="icons.Check" [size]="13" /> No convenience fee in this demo</small>
+            <small class="fine-print"><lucide-icon [img]="icons.Check" [size]="13" /> No booking fee · free cancellation up to 2 hours before</small>
           </aside>
         </div>
-      </section>
+      </div>
 
       @if (checkout()) {
-        <div class="modal">
-          <section>
-            <button class="close" aria-label="Close" (click)="checkout.set(false)"><lucide-icon [img]="icons.X" /></button>
-            <span>DUMMY CHECKOUT · NO REAL CHARGE</span>
-            <h2>One step from the scene.</h2>
-            <div class="pay-row">
-              <lucide-icon [img]="icons.CreditCard" />
-              <span><b>Demo card</b><small>4242 4242 4242 4242</small></span>
-              <lucide-icon [img]="icons.Check" />
-            </div>
-            <div class="split">
-              <lucide-icon [img]="icons.Users" />
-              <span><b>Split with your group</b><small>Demo invite links only</small></span>
-              <button (click)="store.notify('Demo split link created')"><lucide-icon [img]="icons.Plus" /></button>
-            </div>
-            <div class="modal-total"><span>{{ selected().length }} tickets</span><b>₹{{ total().toLocaleString('en-IN') }}</b></div>
-            <button class="pay" [disabled]="paying()" (click)="completeBooking()">Complete dummy payment</button>
-          </section>
-        </div>
+        <app-checkout-modal
+          [eventId]="event.id"
+          [seats]="selectedSeats()"
+          [subtitle]="event.title + ' · ' + date()"
+          [countdown]="remaining() !== null ? countdown() : ''"
+          (closed)="checkout.set(false); loadMap()"
+          (booked)="onBooked($event)"
+        />
       }
     } @else if (store.loaded()) {
-      <section class="simple-page empty-state">
-        <h2>Event not found</h2>
-        <p>It may have been unpublished by the organizer.</p>
-        <button (click)="router.navigateByUrl('/discover')">Back to Discover</button>
-      </section>
+      <div class="container page">
+        <div class="empty-block">
+          <h3>Event not found</h3>
+          <button class="btn btn-primary" (click)="router.navigateByUrl('/discover')">Back to Discover</button>
+        </div>
+      </div>
     }
   `,
 })
@@ -126,21 +97,35 @@ export class SeatsPage {
   protected store = inject(StoreService);
   protected router = inject(Router);
   private api = inject(ApiService);
-  protected readonly icons = { ArrowLeft, Check, ChevronRight, CreditCard, Plus, Users, X, Zap };
-  protected readonly maxSeats = MAX_SEATS;
+  protected readonly icons = { ArrowLeft, Check, ChevronRight, Timer, Users, X };
 
-  protected readonly seats = signal<Seat[]>([]);
+  protected readonly map = signal<SeatMap | null>(null);
+  protected readonly expiresAt = signal<number | null>(null);
+  protected readonly now = signal(Date.now());
+  protected readonly syncing = signal(false);
   protected readonly checkout = signal(false);
-  protected readonly paying = signal(false);
+  protected readonly creatingRoom = signal(false);
+  private holdQueue: Promise<void> = Promise.resolve();
 
   protected readonly event = computed(() => this.store.events().find((e) => e.id === this.id()) ?? null);
   protected readonly selected = this.store.selectedSeats;
+  protected readonly holdMinutes = computed(() => this.store.meta()?.holdMinutes ?? 8);
+  protected readonly date = computed(() => shortDate(this.event()!.startsAt));
+  protected readonly time = computed(() => timeOf(this.event()!.startsAt));
+
+  private readonly seatById = computed(() => new Map((this.map()?.seats ?? []).map((s) => [s.id, s])));
   protected readonly selectedSeats = computed(() =>
-    this.selected()
-      .map((id) => this.seats().find((s) => s.id === id))
-      .filter((s): s is Seat => !!s),
+    this.selected().map((id) => this.seatById().get(id)).filter((s): s is Seat => !!s),
   );
   protected readonly total = computed(() => this.selectedSeats().reduce((sum, s) => sum + s.price, 0));
+  protected readonly remaining = computed(() => {
+    const expires = this.expiresAt();
+    return expires && this.selected().length ? Math.max(0, Math.floor((expires - this.now()) / 1000)) : null;
+  });
+  protected readonly countdown = computed(() => {
+    const s = this.remaining() ?? 0;
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  });
 
   constructor() {
     effect(() => {
@@ -150,49 +135,103 @@ export class SeatsPage {
           this.store.selectedEventId.set(id);
           this.store.selectedSeats.set([]);
         }
-        this.loadSeats(id);
+        this.loadMap(true);
       });
+    });
+
+    // Expire the hold on the client at the same moment the server does.
+    effect(() => {
+      if (this.remaining() === 0) {
+        untracked(() => {
+          this.selected.set([]);
+          this.expiresAt.set(null);
+          this.checkout.set(false);
+          this.store.notify('Your seat hold expired. Pick your seats again.');
+          this.loadMap();
+        });
+      }
+    });
+
+    const tick = setInterval(() => this.now.set(Date.now()), 1000);
+    const poll = setInterval(() => !this.syncing() && !this.checkout() && this.loadMap(), POLL_MS);
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(tick);
+      clearInterval(poll);
     });
   }
 
-  protected isHeld(index: number): boolean {
-    return DEMO_HELD.includes(index);
-  }
+  protected price = inr;
 
-  protected toggleSeat(id: string): void {
+  protected toggleSeat(seat: Seat): void {
     const current = this.selected();
-    if (current.includes(id)) this.selected.set(current.filter((x) => x !== id));
-    else if (current.length < MAX_SEATS) this.selected.set([...current, id]);
-    else this.store.notify(`Maximum ${MAX_SEATS} seats per booking`);
+    let next: string[];
+    if (current.includes(seat.id)) next = current.filter((x) => x !== seat.id);
+    else if (current.length < this.store.maxSeats()) next = [...current, seat.id];
+    else {
+      this.store.notify(`Maximum ${this.store.maxSeats()} seats per booking`);
+      return;
+    }
+    this.selected.set(next);
+    this.syncHold(next);
   }
 
-  protected async completeBooking(): Promise<void> {
-    this.paying.set(true);
+  /** Sends hold changes one at a time so responses can't arrive out of order. */
+  private syncHold(seats: string[]): void {
+    this.syncing.set(true);
+    this.holdQueue = this.holdQueue.then(async () => {
+      try {
+        const res = await firstValueFrom(this.api.hold(this.id(), seats));
+        if (res.conflicts.length) {
+          this.store.notify(`${res.conflicts.join(', ')} ${res.conflicts.length === 1 ? 'was' : 'were'} just taken by someone else`);
+          this.selected.set(res.seats);
+          await this.loadMap();
+        }
+        this.expiresAt.set(res.expiresAt ? Date.parse(res.expiresAt) : null);
+      } catch (err) {
+        this.store.notify(errorMessage(err));
+        await this.loadMap();
+      } finally {
+        this.syncing.set(false);
+      }
+    });
+  }
+
+  protected async loadMap(initial = false): Promise<void> {
     try {
-      const order = await firstValueFrom(this.api.createOrder(this.id(), this.selected()));
-      this.store.orders.update((orders) => [order, ...orders]);
-      this.selected.set([]);
-      this.checkout.set(false);
-      this.router.navigateByUrl('/tickets');
-      this.store.notify('Booking confirmed · tickets ready');
+      const map = await firstValueFrom(this.api.seats(this.id()));
+      this.map.set(map);
+      // The server is the source of truth for which seats you hold; skip while a hold update is in flight.
+      if (!this.syncing()) {
+        this.selected.set(map.hold?.seats ?? []);
+        this.expiresAt.set(map.hold ? Date.parse(map.hold.expiresAt) : null);
+      }
     } catch (err) {
-      this.store.notify(errorMessage(err));
-      this.checkout.set(false);
-      this.loadSeats(this.id());
-    } finally {
-      this.paying.set(false);
+      if (initial) this.store.notify(errorMessage(err));
     }
   }
 
-  private async loadSeats(id: string): Promise<void> {
+  protected async openCheckout(): Promise<void> {
+    await this.holdQueue;
+    if (this.selected().length) this.checkout.set(true);
+  }
+
+  protected onBooked(order: Order): void {
+    this.selected.set([]);
+    this.expiresAt.set(null);
+    this.checkout.set(false);
+    this.router.navigate(['/tickets'], { queryParams: { booked: order.id } });
+    this.store.notify('Booking confirmed · tickets ready');
+  }
+
+  protected async bookWithFriends(): Promise<void> {
+    this.creatingRoom.set(true);
     try {
-      const seats = await firstValueFrom(this.api.seats(id));
-      this.seats.set(seats);
-      // Drop any selections that someone else has booked in the meantime.
-      const unavailable = new Set(seats.filter((s) => s.taken || s.blocked).map((s) => s.id));
-      this.selected.update((current) => current.filter((x) => !unavailable.has(x)));
-    } catch {
-      this.seats.set([]);
+      const room = await firstValueFrom(this.api.createRoom(this.id()));
+      this.router.navigate(['/rooms', room.code]);
+    } catch (err) {
+      this.store.notify(errorMessage(err));
+    } finally {
+      this.creatingRoom.set(false);
     }
   }
 }
