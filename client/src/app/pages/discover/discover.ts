@@ -45,6 +45,9 @@ import {
   timeOf,
 } from '../../core/format';
 import { EventCard } from '../../shared/event-card';
+import { ActivityTicker } from '../../shared/activity-ticker';
+import { CountUp } from '../../shared/count-up';
+import { Reveal } from '../../shared/reveal';
 
 interface CategoryChip {
   label: string;
@@ -76,14 +79,21 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
 
 @Component({
   selector: 'app-discover',
-  imports: [FormsModule, LucideAngularModule, EventCard],
+  imports: [FormsModule, LucideAngularModule, EventCard, ActivityTicker, CountUp, Reveal],
   template: `
     <div class="container page">
       <section class="hero-split">
-        <div class="hero-left">
-          <span class="chip chip-brand"><lucide-icon [img]="icons.MapPin" [size]="14" /> {{ store.city() === 'All cities' ? 'Across India' : store.city() }}</span>
-          <h1>Find something great to do this week.</h1>
-          <p class="lead">Concerts, comedy, theatre, sport and more, with live seat maps and instant QR tickets.</p>
+        <div class="hero-left hero-panel">
+          <span class="blob b1"></span><span class="blob b2"></span>
+          <span class="chip chip-live-soft"><i class="pulse-dot"></i> {{ store.liveEvents().length }} events live {{ store.city() === 'All cities' ? 'across India' : 'in ' + store.city() }}</span>
+          <h1>
+            Find
+            @for (w of [rotatingWord()]; track w) {
+              <span class="rotating-word">{{ w }}</span>
+            }
+            <br />near you this week.
+          </h1>
+          <p class="lead">Pick your exact seat on a live map, book with friends and walk in with a QR ticket.</p>
           <form class="hero-search" (submit)="$event.preventDefault(); scrollToResults()">
             <lucide-icon [img]="icons.Search" [size]="20" />
             <input [ngModel]="query()" (ngModelChange)="query.set($event)" name="q" placeholder="Search events, artists, venues or tags" />
@@ -92,18 +102,48 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
             }
             <button type="submit" class="btn btn-primary">Search</button>
           </form>
-          <div class="hero-stats">
-            <div><b>{{ store.liveEvents().length }}</b><span>live events</span></div>
-            <div><b>{{ venueCount() }}</b><span>venues</span></div>
-            <div><b>{{ store.cities().length }}</b><span>cities</span></div>
+          <div class="trending">
+            <span class="muted"><lucide-icon [img]="icons.Flame" [size]="14" /> Trending:</span>
+            @for (t of trendingSearches(); track t) {
+              <button type="button" (click)="query.set(t); scrollToResults()">{{ t }}</button>
+            }
           </div>
+
+          <div class="hero-stat-cards">
+            <div><span class="stat-ic"><lucide-icon [img]="icons.CalendarDays" [size]="18" /></span><b [appCountUp]="store.liveEvents().length"></b><small>live events</small></div>
+            <div><span class="stat-ic"><lucide-icon [img]="icons.MapPin" [size]="18" /></span><b [appCountUp]="venueCount()"></b><small>venues</small></div>
+            <div><span class="stat-ic"><lucide-icon [img]="icons.Tag" [size]="18" /></span><b [appCountUp]="ticketsLeft()"></b><small>seats available</small></div>
+          </div>
+
+          <div class="social-proof">
+            <div class="avatar-stack">
+              @for (n of proofNames; track n; let i = $index) {
+                <span class="avatar-sm" [attr.data-tone]="i % 6">{{ n }}</span>
+              }
+            </div>
+            <span><b>{{ ticketsSold().toLocaleString('en-IN') }}+ tickets</b> booked · <lucide-icon [img]="icons.Star" [size]="13" /> <b>{{ avgRating() }}</b> avg. venue rating</span>
+          </div>
+
+          @if (thisWeek().length) {
+            <div class="week-strip">
+              <small class="eyebrow">Happening soon</small>
+              <div class="week-items">
+                @for (e of thisWeek(); track e.id) {
+                  <button class="week-item" (click)="open(e)">
+                    <span class="week-thumb art-square" [class.custom-img]="!!e.imageUrl" [style]="poster(e, 120)"></span>
+                    <span class="week-text"><b>{{ e.title }}</b><small>{{ date(e) }}</small></span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
         </div>
 
         @if (slide(); as f) {
-          <aside class="featured-card">
+          <aside class="featured-card" (mouseenter)="paused.set(true)" (mouseleave)="paused.set(false)">
             @for (h of [f]; track h.id) {
-              <div class="featured-media fade-in" (click)="open(h)">
-                <div class="featured-art art-wide" [class.custom-img]="!!h.imageUrl" [style]="poster(h)"></div>
+              <div class="featured-media fade-in" (click)="!justSwiped && open(h)" (pointerdown)="swipeStart($event)" (pointerup)="swipeEnd($event)">
+                <div class="featured-art art-wide" [class.custom-img]="!!h.imageUrl" [style]="poster(h, 1100)"></div>
                 <span class="chip chip-white"><lucide-icon [img]="icons.Flame" [size]="13" /> Featured</span>
               </div>
               <div class="featured-body fade-in">
@@ -121,6 +161,9 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
               </div>
             }
             @if (featured().length > 1) {
+              @for (h of [f]; track h.id) {
+                <div class="slide-progress"><i [class.paused]="paused()"></i></div>
+              }
               <div class="featured-nav">
                 <button class="icon-btn-round sm" aria-label="Previous" (click)="step(-1)"><lucide-icon [img]="icons.ChevronLeft" [size]="16" /></button>
                 <div class="dots">
@@ -134,6 +177,8 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
           </aside>
         }
       </section>
+
+      <app-activity-ticker />
 
       <nav class="category-row" aria-label="Categories">
         @for (chip of categoryChips; track chip.label) {
@@ -228,11 +273,22 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
             <header class="section-head"><div><h2><lucide-icon [img]="icons.Clock" [size]="20" /> Recently viewed</h2></div></header>
             <div class="rail">
               @for (event of recent(); track event.id) {
-                <app-event-card [event]="event" />
+                <app-event-card [event]="event" [index]="$index" />
               }
             </div>
           </section>
         }
+        <section class="section">
+          <header class="section-head"><div><h2><lucide-icon [img]="icons.MapPin" [size]="20" /> Browse by city</h2></div></header>
+          <div class="city-grid">
+            @for (c of cityTiles(); track c.city; let i = $index) {
+              <button class="city-tile" [appReveal]="i" [class.active]="store.city() === c.city" (click)="store.city.set(store.city() === c.city ? 'All cities' : c.city)">
+                <span class="city-art art-square" [style]="poster(c.cover, 420)"></span>
+                <span class="city-text"><b>{{ c.city }}</b><small>{{ c.count }} events · from {{ price(c.from) }}</small></span>
+              </button>
+            }
+          </div>
+        </section>
         @if (trending().length) {
           <section class="section">
             <header class="section-head">
@@ -240,7 +296,7 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
             </header>
             <div class="rail">
               @for (event of trending(); track event.id) {
-                <app-event-card [event]="event" />
+                <app-event-card [event]="event" [index]="$index" />
               }
             </div>
           </section>
@@ -267,7 +323,7 @@ const PRICE_PRESETS: [label: string, min: number | null, max: number | null][] =
         </header>
         <div class="event-grid">
           @for (event of filtered(); track event.id) {
-            <app-event-card [event]="event" />
+            <app-event-card [event]="event" [index]="$index" />
           }
         </div>
         @if (!filtered().length) {
@@ -307,6 +363,13 @@ export class DiscoverPage {
   protected readonly onlyWeekend = signal(false);
   protected readonly showFilters = signal(false);
   protected readonly slideIndex = signal(0);
+  private readonly wordIndex = signal(0);
+  protected readonly proofNames = ['NK', 'AR', 'RS', 'VI', 'ZK'];
+  private readonly words = ['live music', 'stand-up comedy', 'big matches', 'theatre nights', 'food festivals', 'dance shows'];
+  protected readonly rotatingWord = computed(() => this.words[this.wordIndex() % this.words.length]);
+  protected readonly paused = signal(false);
+  private swipeX = 0;
+  protected justSwiped = false;
 
   /** The store keeps the old "All scenes" label; show it as "All". */
   protected readonly activeCategory = computed(() => (this.store.category() === 'All scenes' ? 'All' : this.store.category()));
@@ -316,6 +379,26 @@ export class DiscoverPage {
     return this.store.liveEvents().filter((e) => city === 'All cities' || e.city === city);
   });
   protected readonly venueCount = computed(() => new Set(this.store.liveEvents().map((e) => e.venue)).size);
+  protected readonly ticketsSold = computed(() => this.store.liveEvents().reduce((n, e) => n + e.sold, 0));
+  protected readonly avgRating = computed(() => {
+    const rated = this.store.liveEvents().filter((e) => e.rating.count);
+    return rated.length ? (rated.reduce((n, e) => n + e.rating.avg, 0) / rated.length).toFixed(1) : '4.5';
+  });
+  protected readonly thisWeek = computed(() =>
+    [...this.inCity()].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).slice(0, 3),
+  );
+  protected readonly trendingSearches = computed(() => {
+    const top = [...this.store.liveEvents()].sort((a, b) => b.sold / b.capacity - a.sold / a.capacity)[0];
+    return ['Comedy', 'Jazz', top?.title ?? 'Live music', this.store.city() === 'All cities' ? 'Mumbai' : 'Weekend'];
+  });
+  protected readonly ticketsLeft = computed(() => this.store.liveEvents().reduce((n, e) => n + e.seatsLeft, 0));
+  protected readonly cityTiles = computed(() =>
+    this.store.cities().map((city) => {
+      const events = this.store.liveEvents().filter((e) => e.city === city);
+      const cover = events.find((e) => e.featured) ?? events[0];
+      return { city, count: events.length, from: Math.min(...events.map((e) => e.price)), cover: cover ?? { art: 0, imageUrl: '' } };
+    }).filter((c) => c.count),
+  );
 
   protected readonly featured = computed(() => {
     const local = this.inCity().filter((e) => e.featured && e.seatsLeft > 0);
@@ -415,7 +498,9 @@ export class DiscoverPage {
   });
 
   constructor() {
-    const timer = setInterval(() => this.slideIndex.update((i) => i + 1), 7000);
+    const timer = setInterval(() => !this.paused() && this.slideIndex.update((i) => i + 1), 6000);
+    const words = setInterval(() => this.wordIndex.update((i) => i + 1), 2600);
+    inject(DestroyRef).onDestroy(() => clearInterval(words));
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
@@ -424,6 +509,20 @@ export class DiscoverPage {
   protected time = (e: EventItem) => timeOf(e.startsAt);
   protected price = inr;
   protected poster = posterStyle;
+
+  protected swipeStart(e: PointerEvent): void {
+    this.swipeX = e.clientX;
+  }
+
+  /** Swipe left/right on the featured image to change slides (a tap still opens it). */
+  protected swipeEnd(e: PointerEvent): void {
+    const dx = e.clientX - this.swipeX;
+    if (Math.abs(dx) > 40) {
+      this.justSwiped = true;
+      setTimeout(() => (this.justSwiped = false));
+      this.step(dx < 0 ? 1 : -1);
+    }
+  }
 
   protected step(delta: number): void {
     this.slideIndex.update((i) => i + delta);

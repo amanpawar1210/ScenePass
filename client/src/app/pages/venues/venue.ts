@@ -16,7 +16,7 @@ import { Stars } from '../../shared/stars';
       <button class="back-link" (click)="router.navigateByUrl('/venues')"><lucide-icon [img]="icons.ArrowLeft" [size]="16" /> All venues</button>
       @if (venue(); as v) {
         <section class="venue-hero card">
-          <div class="art-frame"><div class="venue-hero-art art-wide" [class.custom-img]="!!v.imageUrl" [style]="poster(v)"></div></div>
+          <div class="art-frame"><div class="venue-hero-art art-wide" [class.custom-img]="!!v.imageUrl" [style]="poster(v, 1100)"></div></div>
           <div class="venue-hero-body">
             <small class="eyebrow">{{ v.city }}</small>
             <h1>{{ v.name }}</h1>

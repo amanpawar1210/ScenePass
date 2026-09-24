@@ -12,7 +12,10 @@ import { adminRouter } from "./routes/admin.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { venuesRouter } from "./routes/venues.js";
+import { paymentsRouter } from "./routes/payments.js";
+import { liveRouter } from "./routes/live.js";
 import { Waitlist } from "./models/waitlist.js";
+import { Order } from "./models/order.js";
 import { requireAuth } from "./middleware/auth.js";
 import { CATEGORIES, CITIES, HOLD_MINUTES, MAX_SEATS } from "./catalog.js";
 import { publicPromos } from "./services/pricing.js";
@@ -34,6 +37,25 @@ export function createApp() {
   app.use("/api/rooms", roomsRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/venues", venuesRouter);
+  app.use("/api/payments", paymentsRouter);
+  app.use("/api", liveRouter);
+  // Recent bookings for the live activity ticker (first names only).
+  app.get("/api/activity", async (_req, res) => {
+    const orders = await Order.find({ status: "confirmed", "event.startsAt": { $gt: new Date() } })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate("user", "name city");
+    res.json(
+      orders.map((o) => ({
+        name: String(o.user?.name ?? "Someone").split(" ")[0],
+        city: o.user?.city ?? o.event.city,
+        event: o.event.title,
+        eventId: String(o.eventId),
+        seats: o.seats.length,
+        at: o.createdAt,
+      })),
+    );
+  });
   app.get("/api/waitlist", requireAuth, async (req, res) => {
     res.json((await Waitlist.find({ user: req.user._id })).map((w) => String(w.eventId)));
   });

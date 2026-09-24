@@ -2,10 +2,17 @@
 
 Discover live events, choose seats together and carry every ticket in one place.
 
-**Features:** 38 seeded events across 6 cities with lineups and tiered pricing · live seat maps with
-8-minute seat holds (no double booking) · promo codes validated server-side · QR tickets per seat,
-add-to-calendar and self-service cancellation · organizer studio with revenue/occupancy analytics,
-event editor, drafts and door check-in · one-click demo customer and organizer accounts.
+**Highlights:** HD event photography · scannable QR tickets that open a public verification page ·
+organizer camera scanner (or scan from a photo) · downloadable ticket images · realistic dummy payments
+(card with OTP, UPI, net banking, test declines) · real emails for bookings and group invites ·
+live updates over Server-Sent Events.
+
+**Features:** 38 seeded events across 6 cities and 28 venues · live seat maps with 8-minute seat holds
+(no double booking) · group booking rooms with invite links, shared seat picking and cost split ·
+waitlists for sold-out shows with in-app notifications (bookings, reminders, freed-up seats) ·
+venue pages with ratings and reviews from verified attendees · advanced search (price, dates, rating,
+availability, near me) · promo codes validated server-side · QR tickets, add-to-calendar, cancellation ·
+organizer studio with analytics, event editor, drafts and door check-in · one-click demo accounts.
 
 - **client/**: Angular 20 (standalone components, signals, zoneless change detection, lazy-loaded routes)
 - **server/**: Node.js + Express 5 REST API with MongoDB (Mongoose) and JWT auth
@@ -34,6 +41,23 @@ npm start
 
 The server seeds 38 events, 48 demo customers and ~500 demo bookings on first start when the
 `events` collection is empty. Run `npm run seed` in `server/` to reset them.
+
+### Trying QR codes and invites on your phone
+
+Run `npm run start:lan` in `client/`, open `http://<your-computer-ip>:4200` on the phone (same Wi-Fi),
+and set `APP_URL=http://<your-computer-ip>:4200` in `server/.env` so links in emails and QR codes point there.
+Camera scanning needs HTTPS or localhost; "Scan from photo" works everywhere.
+
+### Emails
+
+Booking confirmations (with QR tickets) and group invites are sent with Nodemailer. Without `SMTP_URL`
+they go to a free [Ethereal](https://ethereal.email) test inbox and the app shows a "view email" link.
+Set `SMTP_URL` (e.g. `smtps://user:app-password@smtp.gmail.com`) to deliver real emails.
+
+### Dummy payments
+
+No money moves. Card `4242 4242 4242 4242` (any future expiry, any CVV) with OTP `123456` succeeds;
+`4000 0000 0000 0002` is declined; UPI IDs starting with `fail` are declined.
 
 ## Production
 
@@ -87,10 +111,29 @@ so the whole app runs from one process on `PORT`. In production `MONGODB_URI` an
 | DELETE | `/api/events/:id`            | organizer | Delete an event with no sold tickets                   |
 | GET    | `/api/orders`                | user      | Own bookings (organizers see recent bookings from everyone) |
 | POST   | `/api/orders/quote`          | user      | Price `{ eventId, seats, promoCode }`                   |
-| POST   | `/api/orders`                | user      | Book held seats                                        |
+| POST   | `/api/orders`                | user      | Book held seats with `{ authId, otp }` from the payment step (`roomCode` for group checkout) |
 | POST   | `/api/orders/:id/cancel`     | user      | Cancel up to 2 hours before the show                   |
 | GET    | `/api/favourites`            | user      | Saved event ids                                        |
 | PUT    | `/api/favourites/:eventId`   | user      | Toggle saved event                                     |
+| GET    | `/api/events/:id/reviews`    | optional  | Venue reviews, rating breakdown, whether you can review |
+| POST   | `/api/events/:id/reviews`    | user      | Review an event you attended `{ rating, comment }`      |
+| POST   | `/api/events/:id/waitlist`   | user      | Join the waitlist (DELETE to leave)                    |
+| GET    | `/api/waitlist`              | user      | Event ids you're waitlisted for                        |
+| GET    | `/api/venues`                | –         | Venues with ratings and upcoming counts                |
+| GET    | `/api/venues/:slug`          | –         | Venue detail, upcoming events and reviews              |
+| GET    | `/api/rooms`                 | user      | Your group rooms                                       |
+| POST   | `/api/rooms`                 | user      | Open a room for `{ eventId }`                          |
+| GET    | `/api/rooms/:code`           | user      | Room, members, shared selection and hold               |
+| POST   | `/api/rooms/:code/join`      | user      | Join by invite code (`/leave` to leave)                |
+| PUT    | `/api/rooms/:code/seats`     | member    | Set the shared seat selection                          |
+| GET    | `/api/notifications`         | user      | Latest notifications and unread count                  |
+| POST   | `/api/notifications/read-all`| user      | Mark all read (`/:id/read` for one)                    |
+| GET    | `/api/payments/methods`      | user      | Banks and demo test data                               |
+| POST   | `/api/payments/authorize`    | user      | Validate a dummy card / UPI / net-banking payment      |
+| GET    | `/api/tickets/:code/verify`  | –         | Public ticket status (what a QR code opens)            |
+| POST   | `/api/rooms/:code/invite`    | member    | Email invites `{ emails }`                             |
+| GET    | `/api/stream?topics=`        | optional  | Server-Sent Events for live seats, rooms, notifications |
+| GET    | `/api/activity`              | –         | Recent bookings for the live ticker                    |
 | GET    | `/api/admin/stats`           | organizer | Revenue, tickets, check-ins, occupancy, 14-day trend   |
 | POST   | `/api/admin/checkin`         | organizer | Check in a ticket `{ code }`                            |
 
@@ -101,4 +144,4 @@ events, demo customers and demo bookings. It only ever runs against a database n
 
 - Sign-in is passwordless and the visitor chooses their role, so anyone can sign in as an organizer.
   Add real credentials or an identity provider before using this beyond a demo.
-- Payment, group rooms, votes and split links are simulated in the UI.
+- Payment is simulated; group rooms show a per-person split but only the host pays.

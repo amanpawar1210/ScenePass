@@ -48,7 +48,7 @@ const DEMO = {
         <div class="poster-stack">
           @for (e of showcase(); track e.id; let i = $index) {
             <article class="mini-event" [style.--i]="i">
-              <div class="mini-art art-square" [class.custom-img]="!!e.imageUrl" [style]="poster(e)"></div>
+              <div class="mini-art art-square" [class.custom-img]="!!e.imageUrl" [style]="poster(e, 140)"></div>
               <div>
                 <small>{{ parts(e).weekday }}, {{ parts(e).day }} {{ parts(e).month }} · {{ e.city }}</small>
                 <b>{{ e.title }}</b>

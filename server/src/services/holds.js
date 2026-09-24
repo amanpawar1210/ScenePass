@@ -2,6 +2,7 @@ import { SeatHold } from "../models/seat-hold.js";
 import { HttpError } from "../middleware/errors.js";
 import { HOLD_MINUTES, MAX_SEATS, buildSeats } from "../catalog.js";
 import { bookedSeats } from "./availability.js";
+import { publish } from "./bus.js";
 
 /**
  * Replaces the seats `userId` holds for `event`. Holds share one expiry, set when
@@ -39,6 +40,7 @@ export async function setHolds(event, userId, seatIds) {
     }
   }
   const held = wanted.filter((id) => !conflicts.includes(id));
+  publish(`event:${event._id}`, { type: "seats" });
   return { seats: held, expiresAt: held.length ? expiresAt : null, conflicts };
 }
 

@@ -1,15 +1,18 @@
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { ArrowLeft, Check, ChevronRight, LucideAngularModule, Timer, Users, X } from 'lucide-angular';
+import { ArrowLeft, Check, ChevronRight, LucideAngularModule, Sparkles, Timer, Users, X } from 'lucide-angular';
+import { celebrate } from '../../shared/confetti';
+import { RealtimeService } from '../../core/realtime.service';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { Order, Seat, SeatMap } from '../../core/models';
 import { StoreService } from '../../core/store.service';
-import { inr, shortDate, timeOf } from '../../core/format';
+import { inr, posterStyle, shortDate, timeOf } from '../../core/format';
 import { CheckoutModal } from '../../shared/checkout-modal';
 import { SeatMapView } from '../../shared/seat-map';
 
-const POLL_MS = 12_000;
+// Live updates arrive over SSE; polling is only a slow safety net.
+const POLL_MS = 45_000;
 
 @Component({
   selector: 'app-seats',
@@ -17,10 +20,11 @@ const POLL_MS = 12_000;
   template: `
     @if (event(); as event) {
       <div class="container page">
-        <header class="page-head with-back">
+        <header class="page-head with-back event-strip">
           <button class="icon-btn-round" aria-label="Back to event" (click)="router.navigate(['/events', event.id])">
             <lucide-icon [img]="icons.ArrowLeft" [size]="18" />
           </button>
+          <span class="strip-art art-square" [class.custom-img]="!!event.imageUrl" [style]="poster(event)"></span>
           <div>
             <small class="eyebrow">{{ date() }} · {{ time() }} · {{ event.venue }}</small>
             <h1>{{ event.title }}</h1>
@@ -41,6 +45,15 @@ const POLL_MS = 12_000;
 
           <aside class="card summary-card">
             <h2>Your seats</h2>
+            <div class="best-picker">
+              <span class="muted">Quick pick</span>
+              <div class="stepper">
+                <button type="button" aria-label="Fewer seats" [disabled]="bestCount() <= 1" (click)="bestCount.set(bestCount() - 1)">−</button>
+                <b>{{ bestCount() }}</b>
+                <button type="button" aria-label="More seats" [disabled]="bestCount() >= store.maxSeats()" (click)="bestCount.set(bestCount() + 1)">+</button>
+              </div>
+              <button class="btn btn-outline" (click)="pickBest()"><lucide-icon [img]="icons.Sparkles" [size]="16" /> Best available</button>
+            </div>
             <div class="timer" [class.urgent]="remaining() !== null && remaining()! < 60">
               <lucide-icon [img]="icons.Timer" [size]="18" />
               @if (remaining() !== null) {
@@ -97,7 +110,11 @@ export class SeatsPage {
   protected store = inject(StoreService);
   protected router = inject(Router);
   private api = inject(ApiService);
-  protected readonly icons = { ArrowLeft, Check, ChevronRight, Timer, Users, X };
+  protected readonly icons = { ArrowLeft, Check, ChevronRight, Sparkles, Timer, Users, X };
+  protected readonly bestCount = signal(2);
+  private realtime = inject(RealtimeService);
+  private destroyRef = inject(DestroyRef);
+  private stopLive: () => void = () => {};
 
   protected readonly map = signal<SeatMap | null>(null);
   protected readonly expiresAt = signal<number | null>(null);
@@ -136,6 +153,8 @@ export class SeatsPage {
           this.store.selectedSeats.set([]);
         }
         this.loadMap(true);
+        this.stopLive();
+        this.stopLive = this.realtime.listen([`event:${id}`], () => !this.syncing() && !this.checkout() && this.loadMap(), this.destroyRef);
       });
     });
 
@@ -161,6 +180,7 @@ export class SeatsPage {
   }
 
   protected price = inr;
+  protected poster = (e: { art: number; imageUrl: string }) => posterStyle(e, 160);
 
   protected toggleSeat(seat: Seat): void {
     const current = this.selected();
@@ -215,7 +235,40 @@ export class SeatsPage {
     if (this.selected().length) this.checkout.set(true);
   }
 
+  /** Picks the front-most, most central block of adjacent free seats. */
+  protected pickBest(): void {
+    const map = this.map();
+    if (!map) return;
+    const n = this.bestCount();
+    const free = (s: Seat) => s.status === 'available' || s.status === 'mine';
+    const half = Math.ceil(map.layout.seatsPerRow / 2);
+    const center = (map.layout.seatsPerRow + 1) / 2;
+    const rows = [...new Set(map.seats.map((s) => s.row))];
+    let best: { ids: string[]; score: number } | null = null;
+    rows.forEach((row, r) => {
+      const seats = map.seats.filter((s) => s.row === row);
+      for (let i = 0; i + n <= seats.length; i++) {
+        const block = seats.slice(i, i + n);
+        // Stay on one side of the aisle so the group sits together.
+        const crossesAisle = block[0].number <= half && block[block.length - 1].number > half;
+        if (crossesAisle || !block.every(free)) continue;
+        const mid = (block[0].number + block[block.length - 1].number) / 2;
+        const score = r * 3 + Math.abs(mid - center);
+        if (!best || score < best.score) best = { ids: block.map((s) => s.id), score };
+      }
+    });
+    if (!best) {
+      this.store.notify(`No block of ${n} adjacent seats left. Try fewer seats.`);
+      return;
+    }
+    const ids = (best as { ids: string[] }).ids;
+    this.selected.set(ids);
+    this.syncHold(ids);
+    this.store.notify(`Picked ${ids.join(', ')} for you`);
+  }
+
   protected onBooked(order: Order): void {
+    celebrate();
     this.selected.set([]);
     this.expiresAt.set(null);
     this.checkout.set(false);

@@ -11,6 +11,8 @@ import {
   LucideAngularModule,
   LucideIconData,
   MapPin,
+  Search,
+  ArrowUp,
   Ticket,
   UserRound,
   Users,
@@ -19,6 +21,8 @@ import { AuthService } from '../core/auth.service';
 import { StoreService } from '../core/store.service';
 import { Logo } from '../shared/logo';
 import { NotificationBell } from '../shared/notification-bell';
+import { CommandPalette } from '../shared/command-palette';
+import { QuickView } from '../shared/quick-view';
 
 interface NavItem {
   path: string;
@@ -42,7 +46,8 @@ const PROFILE_NAV: NavItem = { path: '/profile', label: 'Profile', mobileLabel: 
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, LucideAngularModule, Logo, NotificationBell],
+  imports: [RouterOutlet, LucideAngularModule, Logo, NotificationBell, CommandPalette, QuickView],
+  host: { '(window:scroll)': 'onScroll()' },
   template: `
     @if (store.loadError(); as error) {
       <main class="state-screen">
@@ -72,6 +77,11 @@ const PROFILE_NAV: NavItem = { path: '/profile', label: 'Profile', mobileLabel: 
               }
             </nav>
             <div class="top-actions">
+              @if (!auth.isAdmin()) {
+                <button class="search-trigger" (click)="store.paletteOpen.set(true)" aria-label="Search">
+                  <lucide-icon [img]="icons.Search" [size]="16" /><span>Search</span><kbd>Ctrl K</kbd>
+                </button>
+              }
               <div class="menu-wrap">
                 <button class="select-btn" [attr.aria-expanded]="cityOpen()" (click)="cityOpen.set(!cityOpen()); userOpen.set(false)">
                   <lucide-icon [img]="icons.MapPin" [size]="16" /><span>{{ store.city() }}</span><lucide-icon [img]="icons.ChevronDown" [size]="15" />
@@ -118,6 +128,12 @@ const PROFILE_NAV: NavItem = { path: '/profile', label: 'Profile', mobileLabel: 
           </div>
         </footer>
 
+        <app-command-palette />
+        <app-quick-view />
+        @if (showTop()) {
+          <button class="to-top" aria-label="Back to top" (click)="scrollTop()"><lucide-icon [img]="icons.ArrowUp" [size]="18" /></button>
+        }
+
         <nav class="mobile-nav">
           @for (item of mobileNav(); track item.path) {
             <button [class.active]="isActive(item)" (click)="router.navigateByUrl(item.path)">
@@ -133,7 +149,8 @@ export class Shell implements OnInit {
   protected auth = inject(AuthService);
   protected store = inject(StoreService);
   protected router = inject(Router);
-  protected readonly icons = { ChevronDown, LogOut, MapPin, Ticket, UserRound };
+  protected readonly icons = { ArrowUp, ChevronDown, LogOut, MapPin, Search, Ticket, UserRound };
+  protected readonly showTop = signal(false);
   protected readonly cities = computed(() => ['All cities', ...this.store.cities()]);
   protected readonly cityOpen = signal(false);
   protected readonly userOpen = signal(false);
@@ -165,6 +182,14 @@ export class Shell implements OnInit {
   protected isActive(item: NavItem): boolean {
     const url = this.url();
     return [item.path, ...(item.also ?? [])].some((p) => url.startsWith(p));
+  }
+
+  protected onScroll(): void {
+    this.showTop.set(scrollY > 700);
+  }
+
+  protected scrollTop(): void {
+    scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   protected closeMenus(): void {

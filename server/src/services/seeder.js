@@ -26,6 +26,8 @@ export async function seedDatabase({ reset = false } = {}) {
     await Promise.all([
       Event.deleteMany({}),
       Order.deleteMany({}),
+      mongoose.connection.collection("invites").deleteMany({}),
+      mongoose.connection.collection("paymentauths").deleteMany({}),
       SeatHold.deleteMany({}),
       User.deleteMany({ demo: true }),
       Review.deleteMany({}),
@@ -172,6 +174,13 @@ function demoOrdersFor(event, customers, now) {
       total: subtotal - discount,
       status: cancelled ? "cancelled" : "confirmed",
       cancelledAt: cancelled ? new Date(createdAt.getTime() + DAY) : null,
+      payment: {
+        method: rand() < 0.55 ? "upi" : "card",
+        label: rand() < 0.5 ? "Visa •••• 4242" : "UPI · demo@okbank",
+        txnId: randomCode("TXN", 10),
+        paidAt: createdAt,
+        refundedAt: cancelled ? new Date(createdAt.getTime() + DAY) : null,
+      },
       createdAt,
       updatedAt: createdAt,
     });

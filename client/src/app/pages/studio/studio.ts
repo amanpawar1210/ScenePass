@@ -23,22 +23,29 @@ import { AdminStats, CheckinResult, EventItem, Order } from '../../core/models';
 import { StoreService } from '../../core/store.service';
 import { fullDateTime, inr, shortDate, timeOf } from '../../core/format';
 import { EventForm, eventToInput } from './event-form';
+import { QrScanner } from '../../shared/qr-scanner';
+import { PageHero } from '../../shared/page-hero';
 
 type Tab = 'Overview' | 'Events' | 'Check-in' | 'Bookings';
 type EventFilter = 'Upcoming' | 'Drafts' | 'Past' | 'All';
 
 @Component({
   selector: 'app-studio',
-  imports: [FormsModule, LucideAngularModule, EventForm],
+  imports: [FormsModule, LucideAngularModule, EventForm, QrScanner, PageHero],
   template: `
     <section class="simple-page studio">
-      <div class="studio-heading">
-        <div>
-          <div class="page-kicker"><lucide-icon [img]="icons.LayoutDashboard" /> ORGANIZER STUDIO</div>
-          <h1>Organizer overview.</h1>
+      <app-page-hero
+        eyebrow="Organizer studio"
+        title="Your events,"
+        highlight="at a glance."
+        subtitle="Live sales, occupancy and door check-in for every show you run."
+        [icon]="icons.LayoutDashboard"
+      >
+        <div class="row-gap hero-actions">
+          <button class="btn btn-primary btn-lg" (click)="openForm(null)"><lucide-icon [img]="icons.Plus" [size]="17" /> Create event</button>
+          <button class="btn btn-outline btn-lg" (click)="setTab('Check-in')"><lucide-icon [img]="icons.ScanLine" [size]="17" /> Scan tickets</button>
         </div>
-        <button (click)="openForm(null)"><lucide-icon [img]="icons.Plus" [size]="17" /> Create event</button>
-      </div>
+      </app-page-hero>
 
       <div class="tabs">
         @for (t of tabs; track t) {
@@ -138,7 +145,8 @@ type EventFilter = 'Upcoming' | 'Drafts' | 'Past' | 'All';
             <section class="checkin-card">
               <lucide-icon [img]="icons.ScanLine" [size]="30" />
               <h2>Door check-in</h2>
-              <p>Type or scan the code printed under a ticket's QR code.</p>
+              <p>Scan a ticket's QR code with your camera, or type the code printed under it.</p>
+              <app-qr-scanner (scanned)="onScan($event)" />
               <div class="checkin-input">
                 <input
                   [ngModel]="code()"
@@ -311,6 +319,11 @@ export class StudioPage implements OnInit {
     } catch (err) {
       this.store.notify(errorMessage(err));
     }
+  }
+
+  protected onScan(code: string): void {
+    this.code.set(code);
+    this.checkIn();
   }
 
   protected async checkIn(): Promise<void> {

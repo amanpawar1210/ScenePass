@@ -225,6 +225,7 @@ export function buildSeedEvents(now = new Date()) {
       language: "English",
       ageLimit: "All ages",
       tags: [],
+      imageUrl: photoUrl(title),
       ...extra,
     };
   });
@@ -264,3 +265,50 @@ export const REVIEW_SNIPPETS = [
   [5, "Booked with friends through the group room and sat together easily."],
   [4, "Good value for the price. Started ten minutes late."],
 ];
+
+// Hand-picked, license-free Unsplash photos (unsplash.com/license), one per event.
+const PHOTO_IDS = {
+  "Afterlight": "1514525253161-7a46d19cd819",
+  "The Last Monsoon": "1503095396549-807759245b35",
+  "Mostly Honest": "1527224857830-43a7acc85260",
+  "City Derby": "1574629810360-7efbbe195018",
+  "Astra: First Signal": "1517604931442-7e0c8ed2963c",
+  "Indigo Rooms": "1415201364774-f6f0bb35f28f",
+  "The Night Market": "1555939594-58d7cb561ad1",
+  "Frame by Frame": "1531058020387-3be344556be6",
+  "Rhythm & Ritual": "1518834107812-67b0b7c58434",
+  "Rooftop Sessions": "1516450360452-9312f5e86fc7",
+  "New Perspectives": "1554907984-15263bfd63bd",
+  "The Wonder Lab": "1515187029135-18ee286d815b",
+  "Neon Tides": "1470225620780-dba8ba36b745",
+  "Kitchen Confidential": "1507676184212-d03ab07a01bf",
+  "Hamlet, Rewired": "1585699324551-f6c309eedeca",
+  "Mumbai Marathon Expo": "1461896836934-ffe607ba8211",
+  "Sufi Nights": "1459749411175-04bf5292ceea",
+  "Tughlaq": "1519683109079-d5f539e1542f",
+  "Delhi Derby Night": "1501386761578-eac5c94b800a",
+  "Charminar Chronicles": "1504674900247-0877df9cc836",
+  "Stadium Lights": "1522778119026-d647f0596c20",
+  "Retro Reels": "1489599849927-2ee91cede3ba",
+  "Pune Poetry Slam": "1508700115892-45ecd05ae2ad",
+  "Monsoon Carnival": "1492684223066-81342ee5ff30",
+  "Swaralaya": "1524368535928-5b5e00ddc76b",
+  "Margazhi Evenings": "1429962714451-bb934ecdc4ec",
+  "Kathakali Tonight": "1518834107812-67b0b7c58434",
+  "Design Futures": "1511578314322-379afb476865",
+  "Laugh Riot Chennai": "1511671782779-c97d3d27a1d4",
+  "Lightscapes": "1533174072545-7a4b6ad7a6c3",
+  "Bollywood Unplugged": "1464375117522-1311d6a5b81f",
+  "Street Dance Championship": "1504609813442-a8924e83f76e",
+  "Chai & Canvas": "1531243269054-5ebf6f34081e",
+  "Indie Film Fest": "1540575467063-178a50c2df87",
+  "Coastal Kitchen": "1414235077428-338989a2e8c0",
+  "Masters of Mridangam": "1470229722913-7c0e2dbbafd3",
+  "Summer Sound Clash": "1540039155733-5bb30b53aa14",
+  "Open Air Cinema": "1478147427282-58a87a120781",
+};
+
+export function photoUrl(title) {
+  const id = PHOTO_IDS[title];
+  return id ? `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&q=80` : "";
+}

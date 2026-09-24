@@ -7,21 +7,37 @@ import { ApiService, errorMessage } from '../../core/api.service';
 import { Venue } from '../../core/models';
 import { StoreService } from '../../core/store.service';
 import { categoryLabel, posterStyle, shortDate } from '../../core/format';
+import { PageHero } from '../../shared/page-hero';
+import { Reveal } from '../../shared/reveal';
 
 type VenueSort = 'Most events' | 'Top rated' | 'A–Z';
 
 @Component({
   selector: 'app-venues',
-  imports: [FormsModule, LucideAngularModule],
+  imports: [FormsModule, LucideAngularModule, PageHero, Reveal],
   template: `
     <div class="container page">
-      <header class="page-head">
-        <div>
-          <small class="eyebrow">Venues</small>
-          <h1>Explore venues</h1>
-          <p class="lead">Arenas, theatres, clubs and open-air lawns, with ratings from people who've been.</p>
+      <app-page-hero
+        eyebrow="Venues"
+        title="Explore the places"
+        highlight="that make the night."
+        subtitle="Arenas, theatres, clubs and open-air lawns, rated by people who've actually been."
+        [icon]="icons.Building2"
+      >
+        <div class="hero-stat-cards">
+          <div><span class="stat-ic"><lucide-icon [img]="icons.Building2" [size]="18" /></span><b>{{ venues().length }}</b><small>venues</small></div>
+          <div><span class="stat-ic"><lucide-icon [img]="icons.MapPin" [size]="18" /></span><b>{{ cityCount() }}</b><small>cities</small></div>
+          <div><span class="stat-ic"><lucide-icon [img]="icons.Star" [size]="18" /></span><b>{{ avgRating() }}</b><small>avg. rating</small></div>
         </div>
-      </header>
+        <div aside class="collage">
+          @for (v of collage(); track v.slug; let i = $index) {
+            <button [class]="'collage-item c' + i" (click)="open(v)" [title]="v.name">
+              <span class="art-wide" [class.custom-img]="!!v.imageUrl" [style]="poster(v, 420)"></span>
+              <b>{{ v.name }}</b>
+            </button>
+          }
+        </div>
+      </app-page-hero>
 
       <section class="toolbar">
         <div class="search-field grow">
@@ -44,8 +60,15 @@ type VenueSort = 'Most events' | 'Top rated' | 'A–Z';
         <p class="muted results-note">{{ filtered().length }} venues {{ store.city() === 'All cities' ? 'across India' : 'in ' + store.city() }}</p>
         <div class="venue-grid">
           @for (v of filtered(); track v.slug) {
-            <article class="venue-card" role="link" tabindex="0" (click)="open(v)" (keydown.enter)="open(v)">
-              <div class="venue-art art-wide" [class.custom-img]="!!v.imageUrl" [style]="poster(v)"></div>
+            <article class="venue-card" [appReveal]="$index" role="link" tabindex="0" (click)="open(v)" (keydown.enter)="open(v)">
+              <div class="venue-media">
+                <div class="venue-art art-wide" [class.custom-img]="!!v.imageUrl" [style]="poster(v, 600)"></div>
+                <span class="venue-city"><lucide-icon [img]="icons.MapPin" [size]="12" /> {{ v.city }}</span>
+                @if (v.rating.count) {
+                  <span class="venue-rating"><lucide-icon [img]="icons.Star" [size]="12" /> {{ v.rating.avg.toFixed(1) }}</span>
+                }
+                <span class="venue-upcoming">{{ v.upcoming }} upcoming</span>
+              </div>
               <div class="venue-body">
                 <div class="venue-title">
                   <h3>{{ v.name }}</h3>
@@ -89,6 +112,12 @@ export class VenuesPage implements OnInit {
   protected readonly query = signal('');
   protected readonly sort = signal<VenueSort>('Most events');
 
+  protected readonly cityCount = computed(() => new Set(this.venues().map((v) => v.city)).size);
+  protected readonly avgRating = computed(() => {
+    const rated = this.venues().filter((v) => v.rating.count);
+    return rated.length ? (rated.reduce((n, v) => n + v.rating.avg, 0) / rated.length).toFixed(1) : '–';
+  });
+  protected readonly collage = computed(() => [...this.venues()].filter((v) => v.imageUrl).sort((a, b) => b.rating.avg - a.rating.avg).slice(0, 3));
   protected readonly filtered = computed(() => {
     const city = this.store.city();
     const q = this.query().trim().toLowerCase();

@@ -7,19 +7,34 @@ import { ApiService, errorMessage } from '../../core/api.service';
 import { GroupRoom } from '../../core/models';
 import { StoreService } from '../../core/store.service';
 import { initialsOf, posterStyle, shortDate, timeOf } from '../../core/format';
+import { PageHero } from '../../shared/page-hero';
 
 @Component({
   selector: 'app-rooms',
-  imports: [FormsModule, LucideAngularModule],
+  imports: [FormsModule, LucideAngularModule, PageHero],
   template: `
     <div class="container page">
-      <header class="page-head">
-        <div>
-          <small class="eyebrow">Group booking</small>
-          <h1>Book together, sit together</h1>
-          <p class="lead">Open a room for any event, share the link, and everyone picks seats on the same live map.</p>
+      <app-page-hero
+        eyebrow="Group booking"
+        title="Book together,"
+        highlight="sit together."
+        subtitle="Open a room for any event, invite friends by email or WhatsApp, and pick seats on one live map."
+        [icon]="icons.Users"
+      >
+        <div class="hero-stat-cards">
+          <div><span class="stat-ic"><lucide-icon [img]="icons.Users" [size]="18" /></span><b>{{ rooms().length }}</b><small>your rooms</small></div>
+          <div><span class="stat-ic"><lucide-icon [img]="icons.Link2" [size]="18" /></span><b>{{ openCount() }}</b><small>open now</small></div>
+          <div><span class="stat-ic"><lucide-icon [img]="icons.CreditCard" [size]="18" /></span><b>{{ bookedCount() }}</b><small>booked</small></div>
         </div>
-      </header>
+        <div aside class="card join-hero">
+          <h2>Got an invite code?</h2>
+          <p class="muted">Enter the 6-character code a friend shared.</p>
+          <form class="join-form" (submit)="$event.preventDefault(); join()">
+            <input [ngModel]="code()" (ngModelChange)="code.set($event.toUpperCase())" name="code" maxlength="6" placeholder="T3NUPZ" aria-label="Room code" />
+            <button class="btn btn-primary" [disabled]="code().trim().length < 4">Join <lucide-icon [img]="icons.ArrowRight" [size]="16" /></button>
+          </form>
+        </div>
+      </app-page-hero>
 
       <section class="steps">
         <div class="step"><span><lucide-icon [img]="icons.Users" [size]="20" /></span><b>1. Open a room</b><small>Tap "Book with friends" on any event.</small></div>
@@ -28,16 +43,6 @@ import { initialsOf, posterStyle, shortDate, timeOf } from '../../core/format';
         <div class="step"><span><lucide-icon [img]="icons.CreditCard" [size]="20" /></span><b>4. Host checks out</b><small>See the per-person split at checkout.</small></div>
       </section>
 
-      <section class="card join-card">
-        <div>
-          <h2>Got an invite code?</h2>
-          <p class="muted">Enter the 6-character code a friend shared with you.</p>
-        </div>
-        <form class="join-form" (submit)="$event.preventDefault(); join()">
-          <input [ngModel]="code()" (ngModelChange)="code.set($event.toUpperCase())" name="code" maxlength="6" placeholder="e.g. T3NUPZ" aria-label="Room code" />
-          <button class="btn btn-primary" [disabled]="code().trim().length < 4">Join room <lucide-icon [img]="icons.ArrowRight" [size]="16" /></button>
-        </form>
-      </section>
 
       <section class="section">
         <header class="section-head"><div><h2>Your rooms</h2></div></header>
@@ -48,7 +53,7 @@ import { initialsOf, posterStyle, shortDate, timeOf } from '../../core/format';
             @for (room of rooms(); track room.id) {
               <button class="card room-row" (click)="router.navigate(['/rooms', room.code])">
                 @if (room.event; as e) {
-                  <div class="thumb art-square" [class.custom-img]="!!e.imageUrl" [style]="poster(e)"></div>
+                  <div class="thumb art-square" [class.custom-img]="!!e.imageUrl" [style]="poster(e, 160)"></div>
                   <div class="grow">
                     <b>{{ e.title }}</b>
                     <small class="muted">{{ date(e.startsAt) }} · {{ time(e.startsAt) }} · {{ e.venue }}</small>
@@ -86,6 +91,8 @@ export class RoomsPage implements OnInit {
   protected readonly rooms = signal<GroupRoom[]>([]);
   protected readonly loading = signal(true);
   protected readonly code = signal('');
+  protected readonly openCount = () => this.rooms().filter((r) => r.status === 'open').length;
+  protected readonly bookedCount = () => this.rooms().filter((r) => r.status === 'booked').length;
 
   async ngOnInit(): Promise<void> {
     try {

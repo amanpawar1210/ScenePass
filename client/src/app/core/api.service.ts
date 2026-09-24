@@ -3,6 +3,10 @@ import { Injectable, inject } from '@angular/core';
 import {
   AdminStats,
   AppNotification,
+  Invite,
+  PaymentAuthorization,
+  PaymentDetails,
+  TicketVerification,
   GroupRoom,
   ReviewSummary,
   Review,
@@ -66,8 +70,17 @@ export class ApiService {
   quote(eventId: string, seats: string[], promoCode: string) {
     return this.http.post<Quote>('/api/orders/quote', { eventId, seats, promoCode });
   }
-  createOrder(eventId: string, seats: string[], promoCode: string | null, roomCode?: string) {
-    return this.http.post<Order>('/api/orders', { eventId, seats, promoCode, roomCode });
+  paymentMethods() {
+    return this.http.get<{ banks: string[]; otpHint: string; testCards: { success: string; declined: string } }>('/api/payments/methods');
+  }
+  authorizePayment(body: { eventId: string; seats: string[]; promoCode: string | null; roomCode?: string } & PaymentDetails) {
+    return this.http.post<PaymentAuthorization>('/api/payments/authorize', body);
+  }
+  createOrder(body: { eventId: string; seats: string[]; promoCode: string | null; roomCode?: string; authId: string; otp?: string }) {
+    return this.http.post<Order>('/api/orders', body);
+  }
+  verifyTicket(code: string) {
+    return this.http.get<TicketVerification>(`/api/tickets/${encodeURIComponent(code)}/verify`);
   }
   cancelOrder(id: string) {
     return this.http.post<Order>(`/api/orders/${id}/cancel`, {});
@@ -118,6 +131,9 @@ export class ApiService {
   }
   leaveRoom(code: string) {
     return this.http.post<void>(`/api/rooms/${code}/leave`, {});
+  }
+  inviteToRoom(code: string, emails: string[]) {
+    return this.http.post<Invite[]>(`/api/rooms/${code}/invite`, { emails });
   }
   setRoomSeats(code: string, seats: string[]) {
     return this.http.put<GroupRoom>(`/api/rooms/${code}/seats`, { seats });

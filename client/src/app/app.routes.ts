@@ -8,6 +8,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/login/login').then((m) => m.LoginPage),
   },
   {
+    // Public: this is what a ticket's QR code opens on any phone.
+    path: 'verify/:code',
+    loadComponent: () => import('./pages/verify/verify').then((m) => m.VerifyPage),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),

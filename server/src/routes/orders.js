@@ -13,6 +13,10 @@ import { quote } from "../services/pricing.js";
 import { snapshot } from "../services/seeder.js";
 import { notify } from "../services/notify.js";
 import { timeLabel } from "../services/format.js";
+import { PaymentAuth } from "../models/payment-auth.js";
+import { OTP } from "./payments.js";
+import { publish } from "../services/bus.js";
+import { sendBookingEmail } from "../services/emails.js";
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -54,6 +58,19 @@ ordersRouter.post("/", async (req, res) => {
 
   // Only seats this user currently holds can be booked; the unique hold index
   // is what stops two people buying the same seat.
+  // Step 2 of the dummy payment: the authorisation must match this exact booking.
+  const auth = await PaymentAuth.findById(req.body?.authId).catch(() => null);
+  if (!auth || !auth.user.equals(req.user._id) || auth.used) throw new HttpError(402, "Payment session expired. Please pay again.");
+  if (!auth.eventId.equals(event._id) || auth.amount !== q.total || [...auth.seats].sort().join() !== [...ids].sort().join()) {
+    throw new HttpError(409, "Your booking changed. Please review and pay again.");
+  }
+  if (auth.otpRequired && String(req.body?.otp ?? "") !== OTP) {
+    auth.attempts += 1;
+    if (auth.attempts >= 3) auth.used = true;
+    await auth.save();
+    throw new HttpError(400, auth.used ? "Too many wrong OTPs. Payment cancelled." : "Incorrect OTP. Please try again.");
+  }
+
   const holds = await SeatHold.countDocuments({
     eventId: event._id,
     user: req.user._id,
@@ -75,7 +92,11 @@ ordersRouter.post("/", async (req, res) => {
     discount: q.discount,
     promoCode: q.promo?.code ?? null,
     total: q.total,
+    payment: { method: auth.method, label: auth.label, txnId: randomCode("TXN", 10), paidAt: new Date() },
   });
+  auth.used = true;
+  await auth.save();
+  publish(`event:${event._id}`, { type: "seats" });
   await SeatHold.deleteMany({ eventId: event._id, user: req.user._id });
 
   await notify(req.user._id, {
@@ -88,6 +109,7 @@ ordersRouter.post("/", async (req, res) => {
     room.status = "booked";
     room.orderId = order._id;
     await room.save();
+    publish(`room:${room.code}`, { type: "room" });
     await notify(room.members.map((m) => m.user).filter((u) => !u.equals(req.user._id)), {
       type: "room",
       title: `${req.user.name} booked your group's seats`,
@@ -96,6 +118,11 @@ ordersRouter.post("/", async (req, res) => {
     });
   }
   res.status(201).json(order);
+
+  // Confirmation email with QR tickets, sent after responding so checkout stays fast.
+  sendBookingEmail({ to: req.user.email, name: req.user.name, order })
+    .then((email) => Order.updateOne({ _id: order._id }, { $set: { email } }))
+    .catch(() => {});
 });
 
 ordersRouter.post("/:id/cancel", async (req, res) => {
@@ -110,7 +137,9 @@ ordersRouter.post("/:id/cancel", async (req, res) => {
 
   order.status = "cancelled";
   order.cancelledAt = new Date();
+  if (order.payment?.method) order.payment.refundedAt = new Date();
   await order.save();
+  publish(`event:${order.eventId}`, { type: "seats" });
 
   await notify(order.user, {
     type: "cancelled",

@@ -73,12 +73,19 @@ export function durationLabel(mins: number): string {
   return [h && `${h} hr`, m && `${m} min`].filter(Boolean).join(' ');
 }
 
+/** Requests an image at the size it's shown (×2 for sharp high-DPI screens) from CDNs that support it. */
+export function sizedImage(url: string, width: number): string {
+  if (!/^https:\/\/images\.unsplash\.com\//.test(url)) return url;
+  const w = Math.min(2400, Math.round(width * Math.min(2, typeof devicePixelRatio === 'number' ? devicePixelRatio || 1 : 1) * 1.25));
+  return `${url}${url.includes('?') ? '&' : '?'}w=${w}`;
+}
+
 /**
  * Inline style for poster art: an uploaded image, or a tile of the 4×3 event atlas.
  * The stylesheet turns --col/--row into an undistorted crop for any box shape.
  */
-export function posterStyle(event: Pick<EventSnapshot, 'art' | 'imageUrl'>): Record<string, string> {
-  if (event.imageUrl) return { '--poster-img': `url("${event.imageUrl}")` };
+export function posterStyle(event: Pick<EventSnapshot, 'art' | 'imageUrl'>, width = 800): Record<string, string> {
+  if (event.imageUrl) return { '--poster-img': `url("${sizedImage(event.imageUrl, width)}")` };
   const art = event.art ?? 0;
   return { '--col': String(art % 4), '--row': String(Math.floor(art / 4)) };
 }
@@ -110,3 +117,27 @@ export const categoryLabel = (type: string) => CATEGORY_LABELS[type] ?? type;
 /** Two-letter initials from a name. */
 export const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+/** "Starts in 2d 4h", "Starts in 45m", "Happening now", relative to `now`. */
+export function countdownLabel(startsAt: string, endsAt: string, now: number): string {
+  const start = Date.parse(startsAt);
+  if (now >= start) return now < Date.parse(endsAt) ? 'Happening now' : 'Ended';
+  const mins = Math.floor((start - now) / 60_000);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  if (d >= 7) return '';
+  if (d) return `Starts in ${d}d ${h}h`;
+  if (h) return `Starts in ${h}h ${m}m`;
+  return `Starts in ${m}m`;
+}
+
+export function timeAgo(iso: string, now = Date.now()): string {
+  const mins = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+}

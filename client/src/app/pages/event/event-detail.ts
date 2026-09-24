@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   ArrowLeft,
   BellRing,
+  Star,
   CalendarDays,
   Clock,
   Heart,
@@ -21,6 +22,7 @@ import { StoreService } from '../../core/store.service';
 import {
   availability,
   categoryLabel,
+  dayParts,
   durationLabel,
   initialsOf,
   inr,
@@ -44,7 +46,13 @@ import { Stars } from '../../shared/stars';
         </button>
 
         <section class="detail-hero">
-          <div class="art-frame"><div class="detail-art art-wide" [class.custom-img]="!!e.imageUrl" [style]="poster()"></div></div>
+          <div class="art-frame detail-frame">
+            <div class="detail-art art-wide" [class.custom-img]="!!e.imageUrl" [style]="poster()"></div>
+            <div class="date-badge big"><b>{{ day().day }}</b><small>{{ day().month }}</small></div>
+            @if (e.rating.count) {
+              <span class="rating-badge"><lucide-icon [img]="icons.Star" [size]="13" /> {{ e.rating.avg.toFixed(1) }} · {{ e.rating.count }} reviews</span>
+            }
+          </div>
           <div class="detail-head">
             <div class="chip-row">
               <span class="chip chip-brand">{{ category() }}</span>
@@ -228,7 +236,7 @@ export class EventDetailPage {
   protected store = inject(StoreService);
   protected router = inject(Router);
   private api = inject(ApiService);
-  protected readonly icons = { ArrowLeft, BellRing, CalendarDays, Clock, Heart, Languages, MapPin, Share2, ShieldCheck, Ticket, Users };
+  protected readonly icons = { Star, ArrowLeft, BellRing, CalendarDays, Clock, Heart, Languages, MapPin, Share2, ShieldCheck, Ticket, Users };
 
   private readonly fetched = signal<EventItem | null>(null);
   protected readonly notFound = signal(false);
@@ -245,11 +253,12 @@ export class EventDetailPage {
     return (fetched?.id === this.id() ? fetched : null) ?? this.store.events().find((e) => e.id === this.id()) ?? null;
   });
   protected readonly saved = computed(() => this.store.favourites().includes(this.id()));
-  protected readonly poster = computed(() => posterStyle(this.event()!));
+  protected readonly poster = computed(() => posterStyle(this.event()!, 1400));
   protected readonly badge = computed(() => availability(this.event()!));
   protected readonly category = computed(() => categoryLabel(this.event()!.type));
   protected readonly soon = computed(() => relativeDay(this.event()!.startsAt));
   protected readonly date = computed(() => longDate(this.event()!.startsAt));
+  protected readonly day = computed(() => dayParts(this.event()!.startsAt));
   protected readonly time = computed(() => timeOf(this.event()!.startsAt));
   protected readonly duration = computed(() => durationLabel(this.event()!.durationMins));
   protected readonly ended = computed(() => Date.parse(this.event()!.startsAt) <= Date.now());

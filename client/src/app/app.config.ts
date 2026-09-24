@@ -6,7 +6,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withViewTransitions } from '@angular/router';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
@@ -17,7 +17,7 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
     provideHttpClient(withInterceptors([authInterceptor])),
-    provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({ scrollPositionRestoration: 'top' })),
+    provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({ scrollPositionRestoration: 'top' }), withViewTransitions({ skipInitialTransition: true })),
     provideAppInitializer(() => inject(AuthService).restore()),
   ],
 };

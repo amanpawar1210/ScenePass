@@ -1,26 +1,35 @@
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { ArrowLeft, CircleCheck, Copy, Crown, LogOut, LucideAngularModule, Share2, Timer, Users, X } from 'lucide-angular';
+import { ArrowLeft, CircleCheck, Copy, Crown, LogOut, LucideAngularModule, Mail, MessageCircle, QrCode as QrIcon, Send, Share2, Timer, Users, X } from 'lucide-angular';
+import { FormsModule } from '@angular/forms';
+import { QrCode } from '../../shared/qr-code';
+import { RealtimeService } from '../../core/realtime.service';
+import { Invite } from '../../core/models';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { GroupRoom, Order, Seat, SeatMap } from '../../core/models';
 import { StoreService } from '../../core/store.service';
-import { initialsOf, inr, shortDate, timeOf } from '../../core/format';
+import { initialsOf, inr, posterStyle, shortDate, timeOf } from '../../core/format';
 import { CheckoutModal } from '../../shared/checkout-modal';
 import { SeatMapView, SeatTags } from '../../shared/seat-map';
+import { celebrate } from '../../shared/confetti';
 
-const POLL_MS = 4_000;
+// Live updates arrive over SSE; polling is only a slow safety net.
+const POLL_MS = 20_000;
 
 @Component({
   selector: 'app-room',
-  imports: [LucideAngularModule, SeatMapView, CheckoutModal],
+  imports: [FormsModule, LucideAngularModule, SeatMapView, CheckoutModal, QrCode],
   template: `
     <div class="container page">
       @if (room(); as r) {
         @let e = r.event;
-        <header class="page-head with-back">
+        <header class="page-head with-back event-strip">
           <button class="icon-btn-round" aria-label="All rooms" (click)="router.navigateByUrl('/rooms')"><lucide-icon [img]="icons.ArrowLeft" [size]="18" /></button>
+          @if (e) {
+            <span class="strip-art art-square" [class.custom-img]="!!e.imageUrl" [style]="poster(e)"></span>
+          }
           <div>
             <small class="eyebrow">Group room · {{ r.code }}</small>
             <h1>{{ e?.title ?? 'Event' }}</h1>
@@ -79,17 +88,62 @@ const POLL_MS = 4_000;
                   </div>
                 }
               </div>
-              @if (r.status === 'open') {
-                <div class="invite-box">
-                  <small class="muted">Invite link</small>
-                  <div class="invite-row">
-                    <code>{{ inviteUrl() }}</code>
-                    <button class="icon-btn-round sm" aria-label="Copy invite link" (click)="copyInvite()"><lucide-icon [img]="icons.Copy" [size]="15" /></button>
-                    <button class="icon-btn-round sm" aria-label="Share invite" (click)="shareInvite()"><lucide-icon [img]="icons.Share2" [size]="15" /></button>
-                  </div>
-                </div>
-              }
             </section>
+
+            @if (r.status === 'open' && r.isMember) {
+              <section class="card invite-card">
+                <h2>Invite friends</h2>
+                <p class="muted small">We'll email them a link to this room. Friends with a ScenePass account also get an in-app notification.</p>
+                <div class="email-chips" (click)="emailInput.focus()">
+                  @for (e of emails(); track e) {
+                    <span class="email-chip">{{ e }}<button type="button" [attr.aria-label]="'Remove ' + e" (click)="removeEmail(e)"><lucide-icon [img]="icons.X" [size]="12" /></button></span>
+                  }
+                  <input
+                    #emailInput
+                    [ngModel]="draft()"
+                    (ngModelChange)="draft.set($event)"
+                    (keydown)="onEmailKey($event)"
+                    (blur)="addDraft()"
+                    [placeholder]="emails().length ? '' : 'friend@example.com, another@example.com'"
+                    aria-label="Friend email addresses"
+                  />
+                </div>
+                <button class="btn btn-primary block" [disabled]="(!emails().length && !draft().trim()) || sending()" (click)="sendInvites()">
+                  <lucide-icon [img]="icons.Send" [size]="16" /> {{ sending() ? 'Sending…' : 'Send invites' }}
+                </button>
+
+                <div class="share-btns">
+                  <a class="share-btn whatsapp" [href]="whatsappUrl()" target="_blank" rel="noopener"><lucide-icon [img]="icons.MessageCircle" [size]="16" /> WhatsApp</a>
+                  <a class="share-btn" [href]="mailtoUrl()"><lucide-icon [img]="icons.Mail" [size]="16" /> Email</a>
+                  <button class="share-btn" (click)="copyInvite()"><lucide-icon [img]="icons.Copy" [size]="16" /> Copy link</button>
+                  <button class="share-btn" (click)="showQr.set(!showQr())"><lucide-icon [img]="icons.QrIcon" [size]="16" /> QR</button>
+                </div>
+                @if (showQr()) {
+                  <div class="invite-qr fade-in">
+                    <app-qr-code [value]="inviteUrl()" [size]="170" />
+                    <small class="muted">Friends can scan this to join (their phone must be able to open {{ origin }}).</small>
+                  </div>
+                }
+                <div class="invite-row">
+                  <code>{{ inviteUrl() }}</code>
+                  <button class="icon-btn-round sm" aria-label="Share invite" (click)="shareInvite()"><lucide-icon [img]="icons.Share2" [size]="15" /></button>
+                </div>
+
+                @if (r.invites?.length) {
+                  <div class="invite-list">
+                    @for (inv of r.invites; track inv.id) {
+                      <div class="invite-item">
+                        <span class="avatar-sm">{{ inv.email.slice(0, 2).toUpperCase() }}</span>
+                        <span class="grow"><b>{{ inv.email }}</b>
+                          <small class="muted">{{ inv.inApp ? 'Email + in-app notification' : 'Email' }}
+                            @if (inv.previewUrl) { · <a class="link" [href]="inv.previewUrl" target="_blank" rel="noopener">view email</a> }</small></span>
+                        <span [class]="'chip invite-' + inv.status">{{ inviteLabel(inv) }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </section>
+            }
 
             <section class="card">
               <h2>Group seats</h2>
@@ -161,7 +215,15 @@ export class RoomPage {
   protected router = inject(Router);
   private api = inject(ApiService);
   private auth = inject(AuthService);
-  protected readonly icons = { ArrowLeft, CircleCheck, Copy, Crown, LogOut, Share2, Timer, Users, X };
+  protected readonly icons = { ArrowLeft, CircleCheck, Copy, Crown, LogOut, Mail, MessageCircle, QrIcon, Send, Share2, Timer, Users, X };
+  private realtime = inject(RealtimeService);
+  private destroyRef = inject(DestroyRef);
+  private stopLive: () => void = () => {};
+  protected readonly origin = location.origin;
+  protected readonly emails = signal<string[]>([]);
+  protected readonly draft = signal('');
+  protected readonly sending = signal(false);
+  protected readonly showQr = signal(false);
 
   protected readonly room = signal<GroupRoom | null>(null);
   protected readonly map = signal<SeatMap | null>(null);
@@ -191,6 +253,14 @@ export class RoomPage {
   });
   protected readonly bookedSeats = computed(() => this.selection().join(', '));
   protected readonly inviteUrl = computed(() => `${location.origin}/rooms/${this.room()?.code ?? ''}`);
+  private readonly inviteText = computed(() => {
+    const e = this.room()?.event;
+    return `Join me for ${e?.title ?? 'a show'} on ScenePass! Pick your seat in our group room: ${this.inviteUrl()}`;
+  });
+  protected readonly whatsappUrl = computed(() => `https://wa.me/?text=${encodeURIComponent(this.inviteText())}`);
+  protected readonly mailtoUrl = computed(
+    () => `mailto:?subject=${encodeURIComponent('Book with me on ScenePass')}&body=${encodeURIComponent(this.inviteText())}`,
+  );
   protected readonly remaining = computed(() => {
     const hold = this.room()?.hold;
     return hold && this.selection().length ? Math.max(0, Math.floor((Date.parse(hold.expiresAt) - this.now()) / 1000)) : null;
@@ -214,6 +284,7 @@ export class RoomPage {
   }
 
   protected price = inr;
+  protected poster = (e: { art: number; imageUrl: string }) => posterStyle(e, 160);
   protected date = shortDate;
   protected time = timeOf;
   protected initials = initialsOf;
@@ -222,7 +293,12 @@ export class RoomPage {
   async refresh(code = this.code()): Promise<void> {
     try {
       const room = await firstValueFrom(this.api.room(code));
+      const first = this.room()?.code !== room.code;
       this.room.set(room);
+      if (first && room.event) {
+        this.stopLive();
+        this.stopLive = this.realtime.listen([`room:${room.code}`, `event:${room.event.id}`], () => !this.updating && this.refresh(), this.destroyRef);
+      }
       if (room.event) this.map.set(await firstValueFrom(this.api.seats(room.event.id)));
       this.error.set('');
     } catch (err) {
@@ -280,6 +356,48 @@ export class RoomPage {
     }
   }
 
+  protected inviteLabel(inv: Invite): string {
+    return { sent: 'Invited', failed: 'Email failed', joined: 'Joined' }[inv.status];
+  }
+
+  protected onEmailKey(e: KeyboardEvent): void {
+    if (['Enter', ',', ' ', 'Tab'].includes(e.key) && this.draft().trim()) {
+      e.preventDefault();
+      this.addDraft();
+    } else if (e.key === 'Backspace' && !this.draft()) {
+      this.emails.update((list) => list.slice(0, -1));
+    }
+  }
+
+  protected addDraft(): void {
+    const parts = this.draft().split(/[\s,;]+/).map((p) => p.trim().toLowerCase()).filter(Boolean);
+    const bad = parts.filter((p) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p));
+    if (bad.length) this.store.notify(`"${bad[0]}" doesn't look like an email`);
+    this.emails.update((list) => [...new Set([...list, ...parts.filter((p) => !bad.includes(p))])].slice(0, 10));
+    this.draft.set(bad.join(' '));
+  }
+
+  protected removeEmail(email: string): void {
+    this.emails.update((list) => list.filter((e) => e !== email));
+  }
+
+  protected async sendInvites(): Promise<void> {
+    this.addDraft();
+    if (!this.emails().length) return;
+    this.sending.set(true);
+    try {
+      const results = await firstValueFrom(this.api.inviteToRoom(this.code(), this.emails()));
+      const failed = results.filter((r) => r.status === 'failed').length;
+      this.store.notify(failed ? `Sent ${results.length - failed}, ${failed} failed` : `Invites sent to ${results.length} ${results.length === 1 ? 'friend' : 'friends'}`);
+      this.emails.set([]);
+      await this.refresh();
+    } catch (err) {
+      this.store.notify(errorMessage(err));
+    } finally {
+      this.sending.set(false);
+    }
+  }
+
   protected copyInvite(): void {
     navigator.clipboard?.writeText(this.inviteUrl());
     this.store.notify('Invite link copied');
@@ -297,6 +415,7 @@ export class RoomPage {
   }
 
   protected onBooked(order: Order): void {
+    celebrate();
     this.checkout.set(false);
     this.store.notify('Group booking confirmed!');
     this.router.navigate(['/tickets'], { queryParams: { booked: order.id } });

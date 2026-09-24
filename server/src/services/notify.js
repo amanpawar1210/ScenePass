@@ -1,4 +1,5 @@
 import { Notification } from "../models/notification.js";
+import { publish } from "./bus.js";
 
 /**
  * Sends an in-app notification to one or more users. With a `key`, each user
@@ -13,4 +14,5 @@ export async function notify(userIds, { type, title, body = "", link = "", key =
         : Notification.create({ user, type, title, body, link }),
     ),
   );
+  ids.forEach((id) => publish(`user:${id}`, { type: "notification" }));
 }

@@ -3,9 +3,11 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Bell, BellRing, CalendarClock, LucideAngularModule, LucideIconData, Ticket, Users, XCircle } from 'lucide-angular';
 import { ApiService } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
+import { RealtimeService } from '../core/realtime.service';
 import { AppNotification } from '../core/models';
 
-const POLL_MS = 30_000;
+const POLL_MS = 60_000;
 const ICONS: Record<AppNotification['type'], LucideIconData> = {
   booking: Ticket,
   cancelled: XCircle,
@@ -21,7 +23,7 @@ const ICONS: Record<AppNotification['type'], LucideIconData> = {
   imports: [LucideAngularModule],
   host: { class: 'bell-wrap' },
   template: `
-    <button class="icon-btn-round" [class.active]="open()" aria-label="Notifications" (click)="toggle()">
+    <button class="icon-btn-round" [class.active]="open()" [class.ring]="ring()" aria-label="Notifications" (click)="toggle()">
       <lucide-icon [img]="Bell" [size]="18" />
       @if (unread()) {
         <i class="badge-dot">{{ unread() > 9 ? '9+' : unread() }}</i>
@@ -60,11 +62,21 @@ export class NotificationBell {
   protected readonly open = signal(false);
   protected readonly items = signal<AppNotification[]>([]);
   protected readonly unread = signal(0);
+  protected readonly ring = signal(false);
 
   constructor() {
     this.load();
+    const destroyRef = inject(DestroyRef);
     const timer = setInterval(() => this.load(), POLL_MS);
-    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+    destroyRef.onDestroy(() => clearInterval(timer));
+    const me = inject(AuthService).user()?.id;
+    if (me) {
+      inject(RealtimeService).listen([`user:${me}`], () => {
+        this.load();
+        this.ring.set(true);
+        setTimeout(() => this.ring.set(false), 1000);
+      }, destroyRef);
+    }
   }
 
   private async load(): Promise<void> {

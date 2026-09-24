@@ -33,6 +33,12 @@ export class StoreService {
   readonly category = signal('All scenes');
   readonly toast = signal('');
 
+  /** Ticks every 30s so countdowns on cards stay live. */
+  readonly now = signal(Date.now());
+  /** Event shown in the Quick view modal, if any. */
+  readonly quickView = signal<EventItem | null>(null);
+  readonly paletteOpen = signal(false);
+
   readonly cities = computed(() => this.meta()?.cities ?? FALLBACK_CITIES);
   readonly maxSeats = computed(() => this.meta()?.maxSeats ?? MAX_SEATS);
   readonly promos = computed(() => this.meta()?.promos ?? []);
@@ -53,6 +59,10 @@ export class StoreService {
       this.liveEvents()[0] ??
       null,
   );
+
+  constructor() {
+    setInterval(() => this.now.set(Date.now()), 30_000);
+  }
 
   async load(): Promise<void> {
     this.loadError.set(null);

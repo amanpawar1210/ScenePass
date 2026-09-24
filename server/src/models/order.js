@@ -36,6 +36,18 @@ const orderSchema = new mongoose.Schema(
     promoCode: { type: String, default: null },
     total: { type: Number, required: true },
     status: { type: String, enum: ["confirmed", "cancelled"], default: "confirmed", index: true },
+    // Simulated payment details (never real card data: only brand and last 4 digits).
+    payment: {
+      method: { type: String, default: null },
+      label: { type: String, default: null },
+      txnId: { type: String, default: null },
+      paidAt: { type: Date, default: null },
+      refundedAt: { type: Date, default: null },
+    },
+    email: {
+      status: { type: String, default: null },
+      previewUrl: { type: String, default: null },
+    },
     cancelledAt: { type: Date, default: null },
   },
   { timestamps: true },

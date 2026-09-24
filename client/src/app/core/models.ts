@@ -136,6 +136,8 @@ export interface Order {
   total: number;
   status: 'confirmed' | 'cancelled';
   cancelledAt: string | null;
+  payment?: { method: string | null; label: string | null; txnId: string | null; paidAt: string | null; refundedAt: string | null };
+  email?: { status: string | null; previewUrl: string | null };
   createdAt: string;
   /** Populated with name/email for organizers. */
   user?: { name: string; email: string } | string;
@@ -239,6 +241,7 @@ export interface GroupRoom {
   isHost: boolean;
   isMember: boolean;
   conflicts?: string[];
+  invites?: Invite[];
   createdAt: string;
 }
 
@@ -250,4 +253,41 @@ export interface AppNotification {
   link: string;
   read: boolean;
   createdAt: string;
+}
+
+export interface Invite {
+  id: string;
+  email: string;
+  status: 'sent' | 'failed' | 'joined';
+  previewUrl: string | null;
+  inApp: boolean;
+  createdAt: string;
+}
+
+export type PaymentMethod = 'card' | 'upi' | 'netbanking';
+
+export interface PaymentDetails {
+  method: PaymentMethod;
+  card?: { number: string; expiry: string; cvv: string; name: string };
+  upiId?: string;
+  bank?: string;
+}
+
+export interface PaymentAuthorization {
+  authId: string;
+  amount: number;
+  label: string;
+  otpRequired: boolean;
+  otpHint: string;
+}
+
+export interface TicketVerification {
+  code: string;
+  status: 'valid' | 'checked_in' | 'cancelled' | 'expired';
+  seat: string;
+  tier: string;
+  holder: string;
+  checkedInAt: string | null;
+  bookingCode: string;
+  event: { id: string; title: string; startsAt: string; venue: string; city: string; imageUrl: string; art: number };
 }
