@@ -10,7 +10,7 @@ interface SeatRow {
   right: Seat[];
 }
 
-/** One tag per seat picked in a group room, e.g. { A4: { initials: 'NK', tone: 2 } }. */
+/** One tag per seat picked in a group room, e.g. { A4: { initials: 'AP', tone: 2 } }. */
 export type SeatTags = Record<string, { initials: string; tone: number }>;
 
 @Component({

@@ -31,7 +31,7 @@ import { CountUp } from '../../shared/count-up';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Seeded demo shopper with real bookings, and a demo organizer account.
 const DEMO = {
-  customer: { name: 'Nina Kapoor', email: 'nina@scenepass.demo' },
+  customer: { name: 'Aman Pawar', email: 'aman@scenepass.demo' },
   admin: { name: 'Studio Demo', email: 'organizer@scenepass.demo' },
 } as const;
 
@@ -153,7 +153,7 @@ interface Activity {
               <span>Your name <em class="muted">(for tickets)</em></span>
               <div class="input-icon" [class.valid]="name().trim().length > 1">
                 <lucide-icon [img]="icons.UserRound" [size]="17" />
-                <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" placeholder="Aditya Sharma" autocomplete="name" />
+                <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" placeholder="Aman Pawar" autocomplete="name" />
               </div>
             </label>
             <button type="submit" class="btn btn-primary btn-lg block" [disabled]="busy()">
@@ -168,8 +168,8 @@ interface Activity {
           <div class="divider"><span>or explore with a demo account</span></div>
           <div class="demo-cards">
             <button class="demo-card" [disabled]="busy()" (click)="demo('customer')">
-              <span class="avatar-sm big" data-tone="0">NK</span>
-              <span class="grow"><b>Nina Kapoor</b><small>Customer · tickets, saved events & waitlist</small></span>
+              <span class="avatar-sm big" data-tone="0">AP</span>
+              <span class="grow"><b>Aman Pawar</b><small>Customer · tickets, saved events & waitlist</small></span>
               <lucide-icon [img]="icons.ArrowRight" [size]="16" />
             </button>
             <button class="demo-card" [disabled]="busy()" (click)="demo('admin')">

@@ -364,7 +364,7 @@ export class DiscoverPage {
   protected readonly showFilters = signal(false);
   protected readonly slideIndex = signal(0);
   private readonly wordIndex = signal(0);
-  protected readonly proofNames = ['NK', 'AR', 'RS', 'VI', 'ZK'];
+  protected readonly proofNames = ['AP', 'AR', 'RS', 'VI', 'ZK'];
   private readonly words = ['live music', 'stand-up comedy', 'big matches', 'theatre nights', 'food festivals', 'dance shows'];
   protected readonly rotatingWord = computed(() => this.words[this.wordIndex() % this.words.length]);
   protected readonly paused = signal(false);

@@ -6,7 +6,7 @@ import { ChevronRight, Heart, LogOut, LucideAngularModule, MapPin, Pencil, Shiel
 import { ApiService, errorMessage } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { StoreService } from '../../core/store.service';
-import { inr } from '../../core/format';
+import { initialsOf, inr } from '../../core/format';
 import { EventCard } from '../../shared/event-card';
 
 @Component({
@@ -103,7 +103,7 @@ export class ProfilePage {
   protected nameDraft = '';
   protected cityDraft = '';
 
-  protected readonly initials = computed(() => this.auth.user()?.name.slice(0, 2).toUpperCase() ?? '');
+  protected readonly initials = computed(() => initialsOf(this.auth.user()?.name ?? ''));
   private readonly confirmed = computed(() => this.store.orders().filter((o) => o.status === 'confirmed'));
   protected readonly upcomingCount = computed(
     () => this.confirmed().filter((o) => Date.parse(o.event.startsAt) > Date.now()).length,

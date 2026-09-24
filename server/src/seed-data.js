@@ -233,7 +233,7 @@ export function buildSeedEvents(now = new Date()) {
 
 // The first entry is the "Demo customer" on the login page; it gets a curated set of bookings.
 export const DEMO_CUSTOMERS = [
-  ["Nina Kapoor", "nina@scenepass.demo", "Bengaluru"],
+  ["Aman Pawar", "aman@scenepass.demo", "Bengaluru"],
   ["Jay Mehta", "jay@scenepass.demo", "Mumbai"],
   ["Riya Sen", "riya@scenepass.demo", "Delhi"],
   ["Arjun Rao", "arjun@scenepass.demo", "Hyderabad"],
