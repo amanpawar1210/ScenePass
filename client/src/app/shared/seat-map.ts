@@ -22,7 +22,7 @@ export type SeatTags = Record<string, { initials: string; tone: number }>;
         @if (hover(); as h) {
           <b>{{ h.id }}</b> · {{ h.tier }} · {{ price(h.price) }} · <span [class]="'state-' + h.status">{{ stateLabel(h) }}</span>
         } @else {
-          <span class="muted">Hover a seat to see its price</span>
+          <span class="muted">Tap or hover a seat to see its price</span>
         }
       </div>
       <div class="zoom">
